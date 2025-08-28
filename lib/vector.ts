@@ -45,6 +45,10 @@ export class Vector3 {
         return new Vector3(this.x + that.x, this.y + that.y, this.z + that.z);
     }
 
+    subtract(that: Vector3) {
+        return new Vector3(this.x - that.x, this.y - that.y, this.z - that.z);
+    }
+
     scalarMultiply(factor: number) {
         return new Vector3(this.x * factor, this.y * factor, this.z * factor);
     }
