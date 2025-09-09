@@ -5,10 +5,12 @@ export class Trimesh {
     faces: number[][];
     min!: Vector3;   // note the exclamation points!
     max!: Vector3;
+    normals: Vector3[] | null;
 
     constructor(positions: Vector3[], faces: number[][]) {
       this.positions = positions;
       this.faces = faces;
+      this.normals = null;
       this.computeMinMax();
     }
 
@@ -47,6 +49,26 @@ export class Trimesh {
         }
     }
 
+    computeNormals() {
+      const normals = this.positions.map(_ => new Vector3(0, 0, 0));
+
+      for (let face of this.faces) {
+        const positionA = this.positions[face[0]];
+        const positionB = this.positions[face[1]];
+        const positionC = this.positions[face[2]];
+  
+        const vectorAB = positionB.subtract(positionA);
+        const vectorAC = positionC.subtract(positionA);
+  
+        const faceNormal = vectorAB.cross(vectorAC).normalize();
+
+        normals[face[0]] = normals[face[0]].add(faceNormal);
+        normals[face[1]] = normals[face[1]].add(faceNormal);
+        normals[face[2]] = normals[face[2]].add(faceNormal);
+      }
+      this.normals = normals.map(normal => normal.normalize());
+    }
+
     faceBuffer() {
         return new Uint32Array(this.faces.flat());
     }
@@ -55,6 +77,13 @@ export class Trimesh {
         const xyzs = this.positions.flatMap(p => p.xyz);
         return new Float32Array(xyzs);
     }
+
+    normalBuffer() {
+      const xyzs = this.normals!.flatMap(p => p.xyz);
+      return new Float32Array(xyzs);
+    }
+
+
 }
   
 // Example usage:

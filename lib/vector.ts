@@ -57,7 +57,7 @@ export class Vector3 {
         return new Vector3(this.x / this.magnitude, this.y / this.magnitude, this.z / this.magnitude);
     }
 
-    cross_product(that: Vector3) {
+    cross(that: Vector3) {
         return new Vector3(
             this.y * that.z - this.z * that.y,
             this.z * that.x - this.x * that.z,
