@@ -82,7 +82,7 @@ export class Prefab {
 
   static cone(topRadius: number, bottomRadius: number, length: number, longitudeCount: number, latitudeCount: number) {
     const positions: Vector3[] = [];
-
+    length = Math.abs(length); //FILLER
     for (let lat = 0; lat < latitudeCount; ++lat) {
       const radius = lerp(bottomRadius, topRadius, lat / (latitudeCount - 1));
       //below code maybe?
@@ -98,10 +98,34 @@ export class Prefab {
         ));
       }
     }
-    
+
+    const index = (lon: number, lat: number) => {
+      return lat * longitudeCount + lon;
+    };
+
+  const faces: number[][] = [];
+  for (let lat = 0; lat < latitudeCount - 1; ++lat) {
+    for (let lon = 0; lon < longitudeCount; ++lon) {
+      let nextLon = (lon + 1) % longitudeCount;
+      let nextLat = lat + 1;
+
+      faces.push([
+        index(lon, lat),
+        index(nextLon, lat),
+        index(lon, nextLat),
+      ]);
+
+      faces.push([
+        index(nextLon, lat),
+        index(nextLon, nextLat),
+        index(lon, nextLat),
+      ]);
+    }
+  }
+  return new Trimesh(positions, faces);
   }
 
-  sphere(radius: number, longitudeCount: number, latitudeCount: number) {
+  static sphere(radius: number, longitudeCount: number, latitudeCount: number) {
     const positions: Vector3[] = [];
 
     for (let lat = 0; lat < latitudeCount; ++lat) {
@@ -119,6 +143,81 @@ export class Prefab {
         ));
       }
     }
+
+    const index = (lon: number, lat: number) => {
+      return lat * longitudeCount + lon;
+    };
+
+  const faces: number[][] = [];
+  for (let lat = 0; lat < latitudeCount - 1; ++lat) {
+    for (let lon = 0; lon < longitudeCount; ++lon) {
+      let nextLon = (lon + 1) % longitudeCount;
+      let nextLat = lat + 1;
+
+      faces.push([
+        index(lon, lat),
+        index(nextLon, lat),
+        index(lon, nextLat),
+      ]);
+
+      faces.push([
+        index(nextLon, lat),
+        index(nextLon, nextLat),
+        index(lon, nextLat),
+      ]);
+    }
   }
+
+    return new Trimesh(positions, faces);
+  }
+
+
+  static torus(innerRadius: number, outerRadius: number, longitudeCount: number, latitudeCount: number){
+    const positions: Vector3[] = [];
+
+    for (let lat = 0; lat < latitudeCount; ++lat) {
+      // First find the position on the prime meridian.
+      const latRadians = lerp(-Math.PI, Math.PI, lat / (latitudeCount - 1));
+      let x = innerRadius+outerRadius * Math.cos(latRadians);
+      let y = innerRadius+outerRadius * Math.sin(latRadians);
+
+      for (let lon = 0; lon < longitudeCount; ++lon) {
+        const lonRadians = lon / longitudeCount * -2 * Math.PI;
+        positions.push(new Vector3(
+          x * Math.cos(lonRadians),
+          y,
+          x * Math.sin(lonRadians)
+        ));
+      }
+    }
+
+    const index = (lon: number, lat: number) => {
+      return lat * longitudeCount + lon;
+    };
+
+  const faces: number[][] = [];
+  for (let lat = 0; lat < latitudeCount - 1; ++lat) {
+    for (let lon = 0; lon < longitudeCount; ++lon) {
+      let nextLon = (lon + 1) % longitudeCount;
+      let nextLat = lat + 1;
+
+      faces.push([
+        index(lon, lat),
+        index(nextLon, lat),
+        index(lon, nextLat),
+      ]);
+
+      faces.push([
+        index(nextLon, lat),
+        index(nextLon, nextLat),
+        index(lon, nextLat),
+      ]);
+    }
+  }
+
+    return new Trimesh(positions, faces);
+
+  }
+
 
 }

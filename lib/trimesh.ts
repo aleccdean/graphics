@@ -85,6 +85,8 @@ export class Trimesh {
 
 
 }
+
+
   
 // Example usage:
 /*
