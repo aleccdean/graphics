@@ -7,7 +7,17 @@ let shaderProgram: ShaderProgram;
 let vao: VertexArray;
 let mouseX: GLfloat;
 let mouseY: GLfloat;
-let code;
+let code: string;
+let time: number;
+
+// Function to create a shader program with injected user code
+function createShaderWithCode(vertexSource: string, fragmentSource: string, userCode: string): ShaderProgram {
+  const modifiedFragmentSource = fragmentSource.replace(
+    '// TODO: define a vec3 named color.',
+    userCode
+  );
+  return new ShaderProgram(vertexSource, modifiedFragmentSource);
+}
 
 async function initialize() {
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -20,35 +30,33 @@ async function initialize() {
     1, -1, 0,     // vertex 2 is bottom right
     1, 1, 0,      // vertex 3 is top right
   ]);
-  
-  const colors = new Float32Array([
-    1, 0, 0,         // vertex 0 is red
-    0, 0, 1,         // vertex 1 is blue
-    0, 1, 0,
-    1, 1, 1,
-  ]);
 
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', 4, 3, positions);
-  attributes.addAttribute('color', 4, 3, colors);
 
   const vertexSource = await fetchText('flat-vertex.glsl');
   const fragmentSource = await fetchText('flat-fragment.glsl');
-  shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
+  
+  //default code
+  const codeInput = document.getElementById('code') as HTMLTextAreaElement;
+  code = codeInput.value;
+  
+  shaderProgram = createShaderWithCode(vertexSource, fragmentSource, code);
 
   vao = new VertexArray(shaderProgram, attributes)
+
   // Event listeners
   window.addEventListener('resize', () => resizeCanvas());
 
-  const codeInput = document.getElementById('code') as HTMLInputElement;
+  // Set up event listener for code changes
   codeInput.addEventListener('input', () => {
-    code = parseInt(codeInput.value);
+    shaderProgram = createShaderWithCode(vertexSource, fragmentSource, codeInput.value);
+    vao = new VertexArray(shaderProgram, attributes);
   });
 
   window.addEventListener('mousemove', (event) => {
     mouseX = event.clientX - canvas.getBoundingClientRect().left;
     mouseY = event.clientY - canvas.getBoundingClientRect().top;
-    render();
   });
 
   resizeCanvas();  
@@ -58,19 +66,17 @@ function render() {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-
+  time = window.performance.now() / 1000;
   shaderProgram.bind();
   vao.bind();
   shaderProgram.setUniform2f('dimensions', canvas.width, canvas.height);
   shaderProgram.setUniform2f('mouse', mouseX, mouseY);
-  shaderProgram.setUniform1f('time', window.performance.timeOrigin / 1000);
+  shaderProgram.setUniform1f('time', time);
   vao.drawSequence(gl.TRIANGLE_STRIP);
   vao.unbind();
   shaderProgram.unbind();
 
-
-
-  //requestAnimationFrame(render);
+  requestAnimationFrame(render);
 }
 
 function resizeCanvas() {
