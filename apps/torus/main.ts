@@ -32,7 +32,7 @@ async function initialize() {
 
   window.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft') {
-      radians -= 1.0;
+      radians = -1.0;
       render();
     }
   });

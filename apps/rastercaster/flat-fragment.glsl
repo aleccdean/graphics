@@ -5,7 +5,12 @@ uniform vec2 mouse;
 uniform float time;
 
 vec3 f() {
-  vec3 color = vec3(gl_FragCoord.x / dimensions.x * fragColor.x,gl_FragCoord.y / dimensions.y * fragColor.y, fragColor.z);
+  vec2 current = gl_FragCoord.xy / dimensions.xy;
+  float x = gl_FragCoord.x / dimensions.x;
+  float d = distance(current, mouse.xy / dimensions.xy);
+  
+  vec3 color = vec3(current.x * mouse.x / dimensions.x, current.y * mouse.y / dimensions.y, current.x * current.y);
+
   return color;
 } 
 

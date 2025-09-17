@@ -19,7 +19,6 @@ async function initialize() {
     -1, 1, 0,     // vertex 1 is top left
     1, -1, 0,     // vertex 2 is bottom right
     1, 1, 0,      // vertex 3 is top right
-
   ]);
   
   const colors = new Float32Array([
@@ -46,6 +45,12 @@ async function initialize() {
     code = parseInt(codeInput.value);
   });
 
+  window.addEventListener('mousemove', (event) => {
+    mouseX = event.clientX - canvas.getBoundingClientRect().left;
+    mouseY = event.clientY - canvas.getBoundingClientRect().top;
+    render();
+  });
+
   resizeCanvas();  
 }
 
@@ -63,12 +68,9 @@ function render() {
   vao.unbind();
   shaderProgram.unbind();
 
-  canvas.addEventListener('mousemove', (event) => {
-    mouseX = event.clientX - canvas.getBoundingClientRect().left;
-    mouseY = event.clientY - canvas.getBoundingClientRect().top;
-  });
 
-  requestAnimationFrame(render)
+
+  //requestAnimationFrame(render);
 }
 
 function resizeCanvas() {
