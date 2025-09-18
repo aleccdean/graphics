@@ -1,28 +1,92 @@
 export class Matrix4 {
-    elements: Float32Array;
+  elements: Float32Array;
 
-    constructor() {
-        this.elements = new Float32Array(16);
+  constructor() {
+    this.elements = new Float32Array(16);
+  }
+
+  get(r: number, c: number) {
+    return this.elements[r + c*4];
+  }
+
+  set(r: number, c: number, value: number) {
+    this.elements[r + c*4] = value;
+  }
+      
+  static identity() {
+    const m = new Matrix4();
+    m.set(0, 0, 1);
+    m.set(1, 1, 1);
+    m.set(2, 2, 1);
+    m.set(3, 3, 1);
+    return m;
+  }
+
+  static scale(factorX: number, factorY: number, factorZ: number) {
+    const m = Matrix4.identity();
+    m.set(0, 0, factorX);
+    m.set(1, 1, factorY);
+    m.set(2, 2, factorZ);
+    return m;
+  }
+
+  static translate(offsetX: number, offsetY: number, offsetZ: number) {
+    const m = Matrix4.identity();
+    m.set(0, 3, offsetX);
+    m.set(1, 3, offsetY);
+    m.set(2, 3, offsetZ);
+    return m;
+  }
+
+
+  static rotateZ(degrees: number) {
+    const radians = degrees * Math.PI / 180;
+    const m = Matrix4.identity();
+    m.set(0, 0, Math.cos(radians));
+    m.set(0, 1, -Math.sin(radians));
+    m.set(1, 0, Math.sin(radians));
+    m.set(1, 1, Math.cos(radians));
+    return m;
+  }
+
+  static rotateX(degrees: number) {
+    const radians = degrees * Math.PI / 180;
+    const m = Matrix4.identity();
+    m.set(1, 1, Math.cos(radians));
+    m.set(1, 2, -Math.sin(radians));
+    m.set(2, 1, Math.sin(radians));
+    m.set(2, 2, Math.cos(radians));
+    return m;
+  }
+
+  static rotateY(degrees: number) {
+    const radians = degrees * Math.PI / 180;
+    const m = Matrix4.identity();
+    m.set(0, 0, Math.cos(radians));
+    m.set(0, 2, -Math.sin(radians));
+    m.set(2, 0, Math.sin(radians));
+    m.set(2, 2, Math.cos(radians));
+    return m;
+  }
+
+  multiplyMatrix(that: Matrix4) {
+    const m = new Matrix4();
+
+    for (let r = 0; r < 4; ++r) {
+      for (let c = 0; c < 4; ++c) {
+        const dot = 
+          this.get(r, 0) * that.get(0, c) +
+          this.get(r, 1) * that.get(1, c) +
+          this.get(r, 2) * that.get(2, c) +
+          this.get(r, 3) * that.get(3, c);
+        m.set(r, c, dot);
       }
-
-    get(r: number, c: number) {
-        return this.elements[r + c*4];
     }
 
-    set(r: number, c: number, value: number) {
-        this.elements[r + c*4] = value;
-      }
-      
-    static identity() {
-        const m = new Matrix4();
-        m.set(0, 0, 1);
-        m.set(1, 1, 1);
-        m.set(2, 2, 1);
-        m.set(3, 3, 1);
-        return m;
-      }
-      
-      
-      
+    return m;
   }
-  
+
+
+
+
+}
