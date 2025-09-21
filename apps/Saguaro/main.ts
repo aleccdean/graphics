@@ -19,8 +19,6 @@ async function initialize() {
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
   window.gl = canvas.getContext('webgl2') as WebGL2RenderingContext;
 
-
-
   const vertexSource = await fetchText('flat-vertex.glsl');
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
@@ -29,28 +27,25 @@ async function initialize() {
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
-  //attributes.addAttribute('color', model.meshes[0].colors!.count, 3, model.meshes[0].colors!.buffer);
   attributes.addIndices(new Uint32Array(model.meshes[0].indices!.buffer));
 
   vao = new VertexArray(shaderProgram, attributes);
   vao2 = new VertexArray(shaderProgram, attributes);
   vao3 = new VertexArray(shaderProgram, attributes);
-  // Event listeners
-  window.addEventListener('resize', () => resizeCanvas());
 
+  // Initialize the matrix ONCE
   worldFromModel = Matrix4.identity();
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(0.5, 0.5, 1));
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0, 0, 0));
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(90));
 
+  // Set up event listeners BEFORE calling resizeCanvas
+  window.addEventListener('resize', () => resizeCanvas());
   window.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft') {
       worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(-10));
       render();
-    }
-  });
-  window.addEventListener('keydown', event => {
-    if (event.key === 'ArrowRight') {
+    } else if (event.key === 'ArrowRight') {
       worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(10));
       render();
     }
@@ -64,10 +59,10 @@ function render() {
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-
   shaderProgram.bind();
   
-  worldFromModel2 = worldFromModel;
+  // Create a proper copy, not a reference
+  worldFromModel2 = Matrix4.identity().multiplyMatrix(worldFromModel);
   worldFromModel2 = worldFromModel2.multiplyMatrix(Matrix4.translate(0, 8, -5.1));
   worldFromModel2 = worldFromModel2.multiplyMatrix(Matrix4.scale(1, 0.5, 0.5));
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
@@ -75,27 +70,22 @@ function render() {
   vao2.bind();
   vao2.drawIndexed(gl.TRIANGLES);
   vao2.unbind();
-
-  worldFromModel3 = worldFromModel;
+  
+  // Create a proper copy, not a reference
+  worldFromModel3 = Matrix4.identity().multiplyMatrix(worldFromModel);
   worldFromModel3 = worldFromModel3.multiplyMatrix(Matrix4.translate(0, 5.5, 4.5));
   worldFromModel3 = worldFromModel3.multiplyMatrix(Matrix4.scale(1, 0.25, 0.25));
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel3.elements);
-  vao2.bind();
-  vao2.drawIndexed(gl.TRIANGLES);
-  vao2.unbind();
+  vao3.bind();
+  vao3.drawIndexed(gl.TRIANGLES);
+  vao3.unbind();
   
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
-  //shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(1, 1, 1));
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0,0, 0));
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
-  //shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
-  // filled
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
   vao.unbind();
-  
 
   shaderProgram.unbind();
 }
