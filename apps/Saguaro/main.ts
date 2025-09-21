@@ -25,21 +25,22 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  const model = await Gltf.readFromUrl('blender/Saruago.gltf');
+  const model = await Gltf.readFromUrl('blender/Saguaro.gltf');
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
+  //attributes.addAttribute('color', model.meshes[0].colors!.count, 3, model.meshes[0].colors!.buffer);
   attributes.addIndices(new Uint32Array(model.meshes[0].indices!.buffer));
 
   vao = new VertexArray(shaderProgram, attributes);
-  //vao2 = new VertexArray(shaderProgram, attributes);
-  //vao3 = new VertexArray(shaderProgram, attributes);
+  vao2 = new VertexArray(shaderProgram, attributes);
+  vao3 = new VertexArray(shaderProgram, attributes);
   // Event listeners
   window.addEventListener('resize', () => resizeCanvas());
 
   worldFromModel = Matrix4.identity();
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(0.5, 0.5, 1));
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(3, 0, 0));
+  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0, 0, 0));
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(90));
 
   window.addEventListener('keydown', event => {
@@ -65,32 +66,31 @@ function render() {
 
 
   shaderProgram.bind();
-  /*
+  
   worldFromModel2 = worldFromModel;
-  worldFromModel2 = worldFromModel2.multiplyMatrix(Matrix4.translate(1, 8, -5.1));
+  worldFromModel2 = worldFromModel2.multiplyMatrix(Matrix4.translate(0, 8, -5.1));
   worldFromModel2 = worldFromModel2.multiplyMatrix(Matrix4.scale(1, 0.5, 0.5));
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
-  shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel2.elements);
   vao2.bind();
   vao2.drawIndexed(gl.TRIANGLES);
   vao2.unbind();
 
   worldFromModel3 = worldFromModel;
-  worldFromModel3 = worldFromModel3.multiplyMatrix(Matrix4.translate(1, 4, 3.5));
+  worldFromModel3 = worldFromModel3.multiplyMatrix(Matrix4.translate(0, 5.5, 4.5));
   worldFromModel3 = worldFromModel3.multiplyMatrix(Matrix4.scale(1, 0.25, 0.25));
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
-  shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel3.elements);
   vao2.bind();
   vao2.drawIndexed(gl.TRIANGLES);
   vao2.unbind();
-  */
+  
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
-  shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
+  //shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(1, 1, 1));
   worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0,0, 0));
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+  //shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
   // filled
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
@@ -105,11 +105,11 @@ function resizeCanvas() {
   canvas.height = canvas.clientHeight;
   const aspectRatio = canvas.clientWidth / canvas.clientHeight;
   const size = 7;
-  const center = [6, 3];
+  const center = [0, 0];
   if (aspectRatio >= 1) {
-    clipFromWorld = ortho(center[0] - size * aspectRatio, center[0] + size * aspectRatio, center[1] - size, center[1] + size, -1, 1);
+    clipFromWorld = ortho(center[0] - size * aspectRatio, center[0] + size * aspectRatio, center[1] - size, center[1] + size, -10, 10);
   } else {
-    clipFromWorld = ortho(center[0] - size, center[0] + size, center[1] - size / aspectRatio, center[1] + size / aspectRatio, -1, 1);
+    clipFromWorld = ortho(center[0] - size, center[0] + size, center[1] - size / aspectRatio, center[1] + size / aspectRatio, -10, 10);
   }
   render();
 }
