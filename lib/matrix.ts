@@ -86,6 +86,37 @@ export class Matrix4 {
     return m;
   }
 
+  static ortho(left: number, right: number, bottom: number, top: number, near: number, far: number) {
+    const m = Matrix4.identity();
+    const width = right - left;
+    const height = top - bottom;
+    const depth = far - near;
+    m.set(0, 0, 2/width);
+    m.set(0, 3, -(right+left)/width);
+    m.set(1, 1, 2/height);
+    m.set(1, 3, -(top+bottom)/height);
+    m.set(2, 2, 2/-depth);
+    m.set(2, 3, -(near+far)/depth);
+    return m;
+}
+
+
+  static perspective(fovY: number, aspectRatio: number, near: number, far: number) {
+    const m = Matrix4.identity();
+    const radians = fovY * Math.PI / 180 * 0.5;
+    const top = Math.tan(radians)*near;
+    const right = aspectRatio*top;
+    m.set(0, 0, near/right);
+    m.set(1, 1, near/top);
+    m.set(2, 2, (near+far)/(near-far));
+    m.set(2, 3, (2*near*far)/(near-far));
+    m.set(3, 2, -1);
+    m.set(3, 3, 0);
+    return m;
+}
+
+
+
 
 
 
