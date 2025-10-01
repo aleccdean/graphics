@@ -1,3 +1,4 @@
+import { lerp } from 'lib/math-utilities.js';
 export class Vector3 {
     xyz: number[];
 
@@ -63,5 +64,17 @@ export class Vector3 {
             this.z * that.x - this.x * that.z,
             this.x * that.y - this.y * that.x
         );
+    }
+    /*
+    You do need a Vector3.lerp that accepts two parameters: a that vector and a blend parameter.
+     It creates a new vector with lerped x-, y-, and z-coordinates. Use your scalar lerp method to do the work.
+    */
+    lerp(that: Vector3, blend: number) {
+        return new Vector3(
+            lerp(this.x, that.x, blend),
+            lerp(this.y, that.y, blend),
+            lerp(this.z, that.z, blend),
+        );
+
     }
 }
