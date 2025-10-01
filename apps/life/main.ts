@@ -30,6 +30,11 @@ async function initialize() {
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
   attributes.addAttribute('weights', model.meshes[0].weights!.count, 4, model.meshes[0].weights!.buffer);
   attributes.addAttribute('joints', model.meshes[0].joints!.count, 4, new Float32Array(model.meshes[0].joints!.buffer));
+  if (model.meshes[0].colors) {
+    attributes.addAttribute('color', model.meshes[0].colors.count, 3, model.meshes[0].colors.buffer);
+    console.log(model.meshes[0].colors.count, 3, model.meshes[0].colors.buffer);
+    console.log(model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer)
+  }
   attributes.addIndices(new Uint32Array(model.meshes[0].indices!.buffer));
 
   vao = new VertexArray(shaderProgram, attributes);
