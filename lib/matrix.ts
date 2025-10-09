@@ -1,3 +1,5 @@
+import { Vector3 } from "./vector.js";
+
 export class Matrix4 {
   elements: Float32Array;
 
@@ -114,6 +116,27 @@ export class Matrix4 {
     m.set(3, 3, 0);
     return m;
 }
+
+  multiplyPosition(vec: Vector3) {
+    
+    const x = 
+      this.get(0, 0) * vec.x +
+      this.get(0, 1) * vec.y +
+      this.get(0, 2) * vec.z +
+      this.get(0, 3);
+    const y = 
+      this.get(1, 0) * vec.x +
+      this.get(1, 1) * vec.y +
+      this.get(1, 2) * vec.z +
+      this.get(1, 3);
+    const z = 
+      this.get(2, 0) * vec.x +
+      this.get(2, 1) * vec.y +
+      this.get(2, 2) * vec.z +
+      this.get(2, 3);
+  
+    return new Vector3(x, y, z);
+  }
 
 
 

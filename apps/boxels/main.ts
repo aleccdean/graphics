@@ -19,12 +19,16 @@ async function initialize() {
 
 
 
-  const box = await getVertex();
-  box.computeNormals();
+  const { faces, verts, colors } = await getVertex();
+  //box.computeNormals();
   const attributes = new VertexAttributes();
-  attributes.addAttribute('position', box.vertexCount, 3, box.positionBuffer());
-  attributes.addAttribute('normal', box.vertexCount, 3, box.normalBuffer());
-  attributes.addIndices(box.faceBuffer());  
+  console.log(verts);
+  console.log(faces);
+  console.log(Float32Array.from(verts));
+  attributes.addAttribute('position', verts.length/3, 3, verts);
+  attributes.addAttribute('color', colors.length/3, 3, colors);
+  attributes.addIndices(faces);  
+  console.log(attributes);
   
 
   const vertexSource = await fetchText('flat-vertex.glsl');
@@ -35,8 +39,8 @@ async function initialize() {
   //Read in text file with fetch
 
   worldFromModel = Matrix4.identity();
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(0.1,0.1, 0.1));
-  getVertex();
+  //worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(0.1,0.1, 0.1));
+  
 
   // Event listeners
   window.addEventListener('resize', () => resizeCanvas());
@@ -69,7 +73,6 @@ function render() {
 
   shaderProgram.bind();
   shaderProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld);
-  shaderProgram.setUniform3f('rgb', 1.0, 0.843, 0.0);
   
 
   
@@ -90,12 +93,12 @@ function resizeCanvas() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
   const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-  const size = 1;
-  const center = [0, 0];
+  const size = 10;
+  const center = [0, 0, 0];
   if (aspectRatio >= 1) {
-    clipFromWorld = ortho(center[0] - size * aspectRatio, center[0] + size * aspectRatio, center[1] - size, center[1] + size, -1, 1);
+    clipFromWorld = ortho(center[0] - size * aspectRatio, center[0] + size * aspectRatio, center[1] - size, center[1] + size, -10, 10);
   } else {
-    clipFromWorld = ortho(center[0] - size, center[0] + size, center[1] - size / aspectRatio, center[1] + size / aspectRatio, -1, 1);
+    clipFromWorld = ortho(center[0] - size, center[0] + size, center[1] - size / aspectRatio, center[1] + size / aspectRatio, -10, 10);
   }
   render();
 }
@@ -113,8 +116,8 @@ function ortho(left: number, right: number, bottom: number, top: number, near: n
 }
 
 
-async function getVertex() {
-  const objText = await fetchText('models/test.txt')
+async function getVertex(): Promise<{ faces: Uint32Array, verts: Float32Array, colors: Float32Array }> {
+  const objText = await fetchText('models/truck.txt')
   const verts =[];
   const faces = [];
   const colors = [];
@@ -123,68 +126,54 @@ async function getVertex() {
     const tri = line.split("   ");
     //Name variables x,y,z...
     //make vertices and faces buffer
+    const x = parseFloat(tri[0].split(' ')[0]);
+    const y = parseFloat(tri[0].split(' ')[1]);
+    const z = parseFloat(tri[0].split(' ')[2]);
+    const w = parseFloat(tri[1].split(' ')[0]);
+    const h = parseFloat(tri[1].split(' ')[1]);
+    const d = parseFloat(tri[1].split(' ')[2]);
+    const r = parseFloat(tri[2].split(' ')[0]);
+    const g = parseFloat(tri[2].split(' ')[1]);
+    const b = parseFloat(tri[2].split(' ')[2]);
 
-    console.log(tri);
-    verts.push(new Vector3( //1
-      (parseFloat(tri[0].split(' ')[0])-parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])-parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])-parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //2
-      (parseFloat(tri[0].split(' ')[0])+parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])-parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])-parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //3
-      (parseFloat(tri[0].split(' ')[0])+parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])+parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])-parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //4
-      (parseFloat(tri[0].split(' ')[0])-parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])+parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])-parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //5
-      (parseFloat(tri[0].split(' ')[0])-parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])+parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])+parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //6
-      (parseFloat(tri[0].split(' ')[0])-parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])-parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])+parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //7
-      (parseFloat(tri[0].split(' ')[0])+parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])-parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])+parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    verts.push(new Vector3( //8
-      (parseFloat(tri[0].split(' ')[0])+parseFloat(tri[1].split(' ')[0])/2),
-      (parseFloat(tri[0].split(' ')[1])+parseFloat(tri[1].split(' ')[1])/2),
-      (parseFloat(tri[0].split(' ')[2])+parseFloat(tri[1].split(' ')[2])/2)
-    ));
-    faces.push([1, 2, 3]);
-    faces.push([1, 3, 4]);
+    const base = verts.length / 3;
 
-    faces.push([1, 5, 6]);
-    faces.push([1, 4, 5]);
 
-    faces.push([2, 3, 8]);
-    faces.push([2, 7, 8]);
+    for (let i = 0; i < 8; i++) colors.push(r, g, b);
 
-    faces.push([1, 2, 6]);
-    faces.push([1, 6, 7]);
-    
-    faces.push([3, 4, 5]);
-    faces.push([3, 5, 8]);
 
-    faces.push([5, 6, 7]);
-    faces.push([5, 7, 8]);
+    verts.push(
+      x - w/2, y - h/2, z - d/2, // 0
+      x + w/2, y - h/2, z - d/2, // 1
+      x + w/2, y + h/2, z - d/2, // 2
+      x - w/2, y + h/2, z - d/2, // 3
+      x - w/2, y + h/2, z + d/2, // 4
+      x - w/2, y - h/2, z + d/2, // 5
+      x + w/2, y - h/2, z + d/2, // 6
+      x + w/2, y + h/2, z + d/2  // 7
+    );
+
+    // Triangles (counter‑clockwise when viewed from outside)
+    // Back
+    faces.push(base+0, base+2, base+1,  base+0, base+3, base+2);
+    // Left
+    faces.push(base+0, base+4, base+3,  base+0, base+5, base+4);
+    // Right
+    faces.push(base+1, base+7, base+2,  base+1, base+6, base+7);
+    // Bottom
+    faces.push(base+0, base+6, base+1,  base+0, base+5, base+6);
+    // Top
+    faces.push(base+3, base+4, base+7,  base+3, base+7, base+2);
+    // Front
+    faces.push(base+4, base+6, base+5,  base+4, base+7, base+6);
   }
   console.log(verts);
-  return new Trimesh(verts, faces);
+  //return new Trimesh(verts, faces);
+  return {
+    faces: Uint32Array.from(faces),
+    verts: Float32Array.from(verts),
+    colors: Float32Array.from(colors)
+  };
 
 }
 
