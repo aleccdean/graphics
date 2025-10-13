@@ -138,6 +138,51 @@ export class Matrix4 {
     return new Vector3(x, y, z);
   }
 
+  static look(from: Vector3, forward: Vector3, worldUp: Vector3) {
+    // build a matrix
+    const m = Matrix4.identity();
+    const translater = Matrix4.translate(-from.x, -from.y, -from.z);
+    const right = forward.cross(worldUp).normalize();
+    const up = right.cross(forward).normalize();
+
+    const rotater = Matrix4.identity();
+    m.set(0, 0, right.x);
+    m.set(0, 1, right.y);
+    m.set(0, 2, right.z);
+
+    m.set(1, 0, up.x);
+    m.set(1, 1, up.y);
+    m.set(1, 2, up.z);
+
+    m.set(2, 0, -forward.x);
+    m.set(2, 1, -forward.y);
+    m.set(2, 2, -forward.z);
+
+    return m;
+  }
+
+  static rotateAround(axis: Vector3, degrees: number) {
+    const m = Matrix4.identity();
+    const radians = degrees * Math.PI / 180;
+    const s = Math.sin(radians);
+    const c = Math.cos(radians);
+    const d = 1 - c;
+
+    m.set(0, 0, d * axis.x * axis.x + c);
+    m.set(0, 1, d * axis.x * axis.y - s * axis.z);
+    m.set(0, 2, d * axis.x * axis.z + s * axis.y);
+
+    m.set(1, 0, d * axis.y * axis.x + s * axis.z);
+    m.set(1, 1, d * axis.y * axis.y + c);
+    m.set(1, 2, d * axis.y * axis.z - s * axis.x);
+
+    m.set(2, 0, d * axis.z * axis.x - s * axis.y);
+    m.set(2, 1, d * axis.z * axis.y + s * axis.x);
+    m.set(2, 2, d * axis.z * axis.z + c);
+
+    return m;
+}
+
 
 
 

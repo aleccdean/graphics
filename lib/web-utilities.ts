@@ -26,3 +26,10 @@ export async function takeScreenshot(canvas: HTMLCanvasElement) {
   });
   downloadBlob('screenshot.png', png);
 }
+
+export async function fetchImage(url: string): Promise<HTMLImageElement> {
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  return image;
+}
