@@ -2,7 +2,7 @@ import { Field2 } from "./field.js";
 import { Matrix4 } from "./matrix.js";
 import { Vector3 } from "./vector.js";
 
-class FirstPersonCamera {
+export class FirstPersonCamera {
     from: Vector3;
     worldUp: Vector3;
     forward: Vector3;

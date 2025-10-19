@@ -5,12 +5,13 @@ uniform mat4 clipFromEye;
 in vec3 position;
 in vec3 normal;
 
-out vec3 mixPosition;
-out vec3 mixNormal;
+out vec3 mixPositionEye;
+out vec3 mixNormalEye;
 
 void main() {
   gl_Position = vec4(position, 1.0);
-  mixPositionEye = (eyeFromWorld * worldFromModel * vec4(position, 1.0)).xyz;
-  mixNormalEye = (eyeFromWorld * worldFromModel * vec4(normal, 0.0)).xyz;
+  gl_PointSize = 10.0;
+  mixPositionEye = (clipFromEye * eyeFromWorld * worldFromModel * vec4(position, 1.0)).xyz;
+  mixNormalEye = (clipFromEye * eyeFromWorld * worldFromModel * vec4(normal, 0.0)).xyz;
 }
 

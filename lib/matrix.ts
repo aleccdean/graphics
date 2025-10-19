@@ -140,25 +140,24 @@ export class Matrix4 {
 
   static look(from: Vector3, forward: Vector3, worldUp: Vector3) {
     // build a matrix
-    const m = Matrix4.identity();
     const translater = Matrix4.translate(-from.x, -from.y, -from.z);
     const right = forward.cross(worldUp).normalize();
     const up = right.cross(forward).normalize();
 
     const rotater = Matrix4.identity();
-    m.set(0, 0, right.x);
-    m.set(0, 1, right.y);
-    m.set(0, 2, right.z);
+    rotater.set(0, 0, right.x);
+    rotater.set(0, 1, right.y);
+    rotater.set(0, 2, right.z);
 
-    m.set(1, 0, up.x);
-    m.set(1, 1, up.y);
-    m.set(1, 2, up.z);
+    rotater.set(1, 0, up.x);
+    rotater.set(1, 1, up.y);
+    rotater.set(1, 2, up.z);
 
-    m.set(2, 0, -forward.x);
-    m.set(2, 1, -forward.y);
-    m.set(2, 2, -forward.z);
+    rotater.set(2, 0, -forward.x);
+    rotater.set(2, 1, -forward.y);
+    rotater.set(2, 2, -forward.z);
 
-    return m;
+    return rotater.multiplyMatrix(translater);
   }
 
   static rotateAround(axis: Vector3, degrees: number) {

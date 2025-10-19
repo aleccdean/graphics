@@ -1,47 +1,44 @@
 import { VertexAttributes } from 'lib/vertex-attributes.js';
-import { fetchText } from 'lib/web-utilities.js';
+import { fetchImage, fetchText } from 'lib/web-utilities.js';
 import { ShaderProgram } from 'lib/shader-program.js';
 import { VertexArray } from 'lib/vertex-array.js';
 import { Trimesh } from 'lib/trimesh.js';
-import { Prefab } from 'lib/prefab.js';
 import { Matrix4 } from 'lib/matrix.js';
 import { Vector3 } from 'lib/vector.js';
 import { FirstPersonCamera } from 'lib/first-person-camera.js';
+import { Field2 } from 'lib/field.js';
 let canvas: HTMLCanvasElement;
 let shaderProgram: ShaderProgram;
-let clipFromWorld: Float32Array;
 let clipFromEye: Matrix4;
 let vao: VertexArray;
 let worldFromModel: Matrix4;
+let eyeFromWorld: Matrix4;
+let camera: FirstPersonCamera;
+let hMap: Trimesh;
 
 async function initialize() {
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
   window.gl = canvas.getContext('webgl2') as WebGL2RenderingContext;
 
-  const mesh = Prefab.cylinder(0.3, 0.1, 32, 16);
-  mesh.computeNormals();
-  mesh.computeMinMax();
-
-  const centroid = mesh.min.add(mesh.max).scalarMultiply(0.5);
-  const rotator = Matrix4.rotateX(90);
-
-  worldFromModel =  rotator.multiplyMatrix(Matrix4.translate(-centroid.x, -centroid.y, -centroid.z));
-
-  const v = new Vector3(0.6882, 0.2294, -0.6882);
-  const out = Matrix4.rotateAround(v, -30);
-  console.log(out);
-
-
-  const from = new Vector3(4, -2, 8);
-  const to = new Vector3(-2, -2, 8);
-  const up = new Vector3(0, 1, 0);
-  const cam = new FirstPersonCamera(from, to, up);
-  console.log(cam.right);
+  const image = await fetchImage('heightmap.png');
   
+  const heightmap = Field2.readFromImage(image);
+  hMap = heightmap.toTrimesh(new Vector3(1, 1, 1));
+  
+
+  const from = new Vector3(1, 1, 1);
+  const to = new Vector3(1, 1, 1);
+  const up = new Vector3(1, 1, 1);
+  camera = new FirstPersonCamera(from, to, up);
+  console.log(camera.right);
+  
+  
+  eyeFromWorld = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,-10));
+  worldFromModel = Matrix4.identity();
   const attributes = new VertexAttributes();
-  attributes.addAttribute('position', mesh.vertexCount, 3, mesh.positionBuffer());
-  attributes.addAttribute('normal', mesh.vertexCount, 3, mesh.normalBuffer());
-  attributes.addIndices(mesh.faceBuffer());
+  attributes.addAttribute('position', hMap.vertexCount, 3, hMap.positionBuffer());
+  attributes.addAttribute('normal', hMap.vertexCount, 3, hMap.normalBuffer());
+  attributes.addIndices(hMap.faceBuffer());
 
   const vertexSource = await fetchText('flat-vertex.glsl');
   const fragmentSource = await fetchText('flat-fragment.glsl');
@@ -56,16 +53,15 @@ async function initialize() {
   window.addEventListener('pointerdown', () => {
     document.body.requestPointerLock();
   });
-  /*
+  
   window.addEventListener('pointermove', event => {
   if (document.pointerLockElement) {
-    camera.yaw(-event.movementX * rotationSpeed);
-    camera.pitch(-event.movementY * rotationSpeed);
+    camera.yaw(-event.movementX * 10);
+    camera.pitch(-event.movementY * 10);
     render();
   }
     
 });
-*/
 
   resizeCanvas();  
   requestAnimationFrame(animate);
@@ -79,8 +75,10 @@ function render() {
   shaderProgram.bind();
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements)
+  shaderProgram.setUniformMatrix4fv('eyeFromWorld', eyeFromWorld.elements)
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
+  vao.drawSequence(gl.POINTS);
   vao.unbind();
   shaderProgram.unbind();
 
@@ -90,8 +88,6 @@ function resizeCanvas() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
   const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-  const height = 3 / aspectRatio;
-  //clipFromEye = Matrix4.ortho(-3, 3, -height, height, -10, 10);
   clipFromEye = Matrix4.perspective(45, aspectRatio, 0.01, 10);
   render();
 }
@@ -142,17 +138,5 @@ function onKeyUp(event: KeyboardEvent) {
 }
 
 // TODO: add event listeners
-
-function ortho(left: number, right: number, bottom: number, top: number, near: number = -1, far: number = 1) {
-  return new Float32Array([
-    2 / (right - left), 0, 0, 0,
-    0, 2 / (top - bottom), 0, 0,
-    0, 0, 2 / (near - far), 0,
-    -(right + left) / (right - left),
-    -(top + bottom) / (top - bottom),
-    (near + far) / (near - far),
-    1,
-  ]);
-}
 
 window.addEventListener('load', () => initialize());

@@ -54,6 +54,10 @@ export class Vector3 {
         return new Vector3(this.x * factor, this.y * factor, this.z * factor);
     }
 
+    multiply(that: Vector3) {
+        return new Vector3(this.x * that.x, this.y * that.y, this.z * that.z);
+    }
+
     normalize() {
         return new Vector3(this.x / this.magnitude, this.y / this.magnitude, this.z / this.magnitude);
     }

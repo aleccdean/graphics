@@ -37,50 +37,52 @@ export class Field2 {
   }
 
   toTrimesh(factors: Vector3) {
-  const positions: Vector3[] = [];
+    const positions: Vector3[] = [];
 
-  for (let z = 0; z < this.height; ++z) {
-    for (let x = 0; x < this.width; ++x) {
-      const y = this.get2(x, z);
-      positions.push(new Vector3(x, y, z).cross(factors)); //Might not be cross? was multiply in book
+    for (let z = 0; z < this.height; ++z) {
+      for (let x = 0; x < this.width; ++x) {
+        const y = this.get2(x, z);
+        positions.push(new Vector3(x, y, z).multiply(factors));
+      }
     }
+
+    const index = (x: number, y: number) => {
+      return y * this.width + x;
+    };
+
+    const faces: number[][] = [];
+    for (let y = 0; y < this.height - 1; ++y) {
+      for (let x = 0; x < this.width - 1; ++x) {
+        const nextX = x + 1;
+        const nextY = y + 1;
+        faces.push([index(x, y), index(x, nextY), index(nextX, y)]);
+        faces.push([index(nextX, y), index(x, nextY), index(nextX, nextY)]);
+      }
+    }
+
+    return new Trimesh(positions, faces);
   }
 
-  const index = (x: number, y: number) => {
-    return y * this.width + x;
-  };
 
-  const faces: number[][] = [];
-  for (let y = 0; y < this.height - 1; ++y) {
-    for (let y = 0; y < this.width - 1; ++y) {
-      const nextX = y + 1;
-      const nextY = y + 1;
-      faces.push([index(y, y), index(nextX, y), index(y, nextY)]);
-      faces.push([index(nextX, y), index(nextX, nextY), index(y, nextY)]);
-    }
+
+
+  blerp(x: number, y: number): number {
+    const floorX = Math.floor(x);
+    const floorY = Math.floor(y);
+    const fractionX = x - floorX;
+    const fractionY = y - floorY;
+
+    const bottomLeft = this.get2(floorX, floorY);
+    const bottomRight = this.get2(floorX+1, floorY);
+    const topLeft = this.get2(floorX, floorY+1);
+    const topRight = this.get2(floorX+1, floorY+1);
+
+    const bottom = lerp(bottomLeft, bottomRight, fractionX);
+    const top = lerp(topLeft, topRight, fractionX);
+    const middle = lerp(bottom, top, fractionY);
+
+    return middle;
   }
-
-  return new Trimesh(positions, faces);
-}
-
-
-blerp(x: number, y: number): number {
-  const floorX = Math.floor(x);
-  const floorY = Math.floor(y);
-  const fractionX = x - floorX;
-  const fractionY = y - floorY;
-
-  const bottomLeft = this.get2(floorX, floorY);
-  const bottomRight = this.get2(floorX+1, floorY);
-  const topLeft = this.get2(floorX, floorY+1);
-  const topRight = this.get2(floorX+1, floorY+1);
-
-  const bottom = lerp(bottomLeft, bottomRight, fractionX);
-  const top = lerp(topLeft, topRight, fractionX);
-  const middle = lerp(bottom, top, fractionY);
-
-  return middle;
-}
 
 
 }
