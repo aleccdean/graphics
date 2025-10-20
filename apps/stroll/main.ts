@@ -27,16 +27,16 @@ async function initialize() {
   window.gl = canvas.getContext('webgl2') as WebGL2RenderingContext;
 
   const image = await fetchImage('heightmap.png');
-  
+  const scale = new Vector3(1, 100, 1);
   heightmap = Field2.readFromImage(image);
-  hMap = heightmap.toTrimesh(new Vector3(10, 10, 10));
+  hMap = heightmap.toTrimesh(scale);
 
   
 
   const from = new Vector3(0,2, 0);
   const to = new Vector3(5, 0, 5);
   const up = new Vector3(0, 1, 0);
-  camera = new FirstPersonCamera(from, to, heightmap, 1, new Vector3(2,2,2));
+  camera = new FirstPersonCamera(from, to, heightmap, 1, scale);
   // console.log(camera.right);
 
   
@@ -81,14 +81,14 @@ function render() {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  //gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.DEPTH_TEST);
 
   const lightPositionEye = camera.eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
   shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
-  shaderProgram.setUniform3f("albedo", 0.0, 0.0, 0.0);
-  shaderProgram.setUniform3f("diffuseColor", 0.0, 0.0, 0.0);
-  shaderProgram.setUniform1f("ambientFactor", 0.8);
+  shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
+  shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
+  shaderProgram.setUniform1f("ambientFactor", 0.1);
   shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
@@ -106,7 +106,7 @@ function resizeCanvas() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
   const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-  clipFromEye = Matrix4.perspective(90, aspectRatio, 0.01, 20);
+  clipFromEye = Matrix4.perspective(90, aspectRatio, 0.01, 2000);
   render();
 }
 
@@ -116,7 +116,7 @@ function animate(now: DOMHighResTimeStamp) {
   const elapsed = then ? now - then : 0;
   // update animated state
   const deltaSeconds = elapsed / 1000;               // convert ms -> s
-  const moveSpeed = 2.5;                             // units per second
+  const moveSpeed = 10;                             // units per second
   const turnSpeedDeg = 90;                           // degrees per second
   camera.advance(vertical * deltaSeconds * moveSpeed);
   camera.strafe(horizontal * deltaSeconds * moveSpeed);

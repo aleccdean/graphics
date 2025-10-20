@@ -13,20 +13,16 @@ out vec4 fragmentColor;
 void main() {
   vec3 lightDirection = normalize(lightPositionEye - mixPositionEye);
   vec3 normal = normalize(mixNormalEye); 
-  if (!gl_FrontFacing) {
-    normal = -normal;
-  }
+  //if (!gl_FrontFacing) {
+    //normal = -normal;
+  //}
   float litness = max(0.0, dot(normal, lightDirection));
 
   vec3 ambient = ambientFactor * albedo * diffuseColor;
   vec3 diffuse = (1.0 - ambientFactor) * litness * albedo * diffuseColor;
 
-  vec3 eyeDirection = normalize(-mixPositionEye);
-  vec3 halfDirection = normalize(eyeDirection + lightDirection);
-  float specularity = pow(max(0.0, dot(halfDirection, normal)), shininess);
-  vec3 specular = specularity * specularColor;
 
 
-  vec3 rgb = ambient + diffuse + specular;
+  vec3 rgb = ambient + diffuse;
   fragmentColor = vec4(rgb, 1.0);
 }
