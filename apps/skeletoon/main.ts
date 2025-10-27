@@ -24,7 +24,7 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  model = await gltf.Model.readFromUrl('model/Character.gltf');
+  model = await gltf.Model.readFromUrl('model/Snowman2.gltf');
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
@@ -39,6 +39,7 @@ async function initialize() {
 
   console.log(Object.keys(model.animations).length);
   const clipNames = Object.keys(model.animations);
+  //model.play('ArmatureAction');
   currentClipIndex = 0;
   for (let clip of Object.keys(model.animations)) {
     console.log(clip);
@@ -53,31 +54,25 @@ async function initialize() {
 
   // Initialize the matrix ONCE
   worldFromModel = Matrix4.identity();
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(0.5, 0.5, 1));
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0, -10, 0));
-  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(90));
-
+  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.scale(1, 1, 1));
+  worldFromModel = worldFromModel.multiplyMatrix(Matrix4.translate(0, 0, 0));
+  //worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateX(45));
   // Set up event listeners BEFORE calling resizeCanvas
   window.addEventListener('resize', () => resizeCanvas());
   window.addEventListener('keydown', event => {
         if (event.key === 'ArrowLeft') {
           worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(-10));
-          render();
         } else if (event.key === 'ArrowRight') {
           worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateY(10));
-          render();
         } else if (event.key === 'ArrowUp') {
           worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateZ(10));
-          render();
         } else if (event.key === 'ArrowDown') {
           worldFromModel = worldFromModel.multiplyMatrix(Matrix4.rotateZ(-10));
-          render();
         } else if (event.key == ' ') {
           //Switch animation
           currentClipIndex = (currentClipIndex + 1) % clipNames.length;
           model.play(clipNames[currentClipIndex]);
           console.log('Switched to:', clipNames[currentClipIndex]);
-          render();
         }
       });
 
@@ -104,9 +99,9 @@ function render() {
   const lightPositionEye = eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
   shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
-  shaderProgram.setUniform3f("albedo", 0.0, 0.0, 0.0);
-  shaderProgram.setUniform3f("diffuseColor", 0.0, 0.0, 0.0);
-  shaderProgram.setUniform1f("ambientFactor", 0.5);
+  shaderProgram.setUniform3f("albedo", 1.0, 0.0, 0.0);
+  shaderProgram.setUniform3f("diffuseColor", 1.0, 0.0, 0.0);
+  shaderProgram.setUniform1f("ambientFactor", 0.8);
   shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
@@ -129,7 +124,7 @@ function resizeCanvas() {
   const aspectRatio = canvas.clientWidth / canvas.clientHeight;
   const size = 1;
   const center = [0, 0];
-  clipFromEye = Matrix4.perspective(75, aspectRatio, 0.1, 30);
+  clipFromEye = Matrix4.perspective(90, aspectRatio, 0.1, 100);
 
   render();
 }

@@ -24,7 +24,7 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  model = await gltf.Model.readFromUrl('model/Character.gltf');
+  model = await gltf.Model.readFromUrl('model/Snowman.gltf');
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
@@ -42,7 +42,7 @@ async function initialize() {
   for (let clip of Object.keys(model.animations)) {
     console.log(clip);
   }
-  model.play('ArmatureAction');
+  model.play('Head');
 
   // Set up event listeners BEFORE calling resizeCanvas
   window.addEventListener('resize', () => resizeCanvas());

@@ -1,4 +1,4 @@
-import { Vector3 } from "./vector.js";
+import { Vector3, Vector4 } from "./vector.js";
 
 export class Matrix4 {
   elements: Float32Array;
@@ -138,6 +138,18 @@ export class Matrix4 {
     return new Vector3(x, y, z);
   }
 
+
+  multiplyVector4(v: Vector4) {
+    return new Vector4(
+      this.get(0,0) * v.x + this.get(0,1) * v.y + this.get(0,2) * v.z + this.get(0,3) * v.w,
+      this.get(1,0) * v.x + this.get(1,1) * v.y + this.get(1,2) * v.z + this.get(1,3) * v.w,
+      this.get(2,0) * v.x + this.get(2,1) * v.y + this.get(2,2) * v.z + this.get(2,3) * v.w,
+      this.get(3,0) * v.x + this.get(3,1) * v.y + this.get(3,2) * v.z + this.get(3,3) * v.w
+    );
+  }
+
+
+
   static look(from: Vector3, forward: Vector3, worldUp: Vector3) {
     // build a matrix
     const translater = Matrix4.translate(-from.x, -from.y, -from.z);
@@ -180,6 +192,52 @@ export class Matrix4 {
     m.set(2, 2, d * axis.z * axis.z + c);
 
     return m;
+}
+
+inverse() {
+  let m = new Matrix4();
+
+  let a0 = this.get(0, 0) * this.get(1, 1) - this.get(0, 1) * this.get(1, 0);
+  let a1 = this.get(0, 0) * this.get(1, 2) - this.get(0, 2) * this.get(1, 0);
+  let a2 = this.get(0, 0) * this.get(1, 3) - this.get(0, 3) * this.get(1, 0);
+
+  let a3 = this.get(0, 1) * this.get(1, 2) - this.get(0, 2) * this.get(1, 1);
+  let a4 = this.get(0, 1) * this.get(1, 3) - this.get(0, 3) * this.get(1, 1);
+  let a5 = this.get(0, 2) * this.get(1, 3) - this.get(0, 3) * this.get(1, 2);
+
+  let b0 = this.get(2, 0) * this.get(3, 1) - this.get(2, 1) * this.get(3, 0);
+  let b1 = this.get(2, 0) * this.get(3, 2) - this.get(2, 2) * this.get(3, 0);
+  let b2 = this.get(2, 0) * this.get(3, 3) - this.get(2, 3) * this.get(3, 0);
+
+  let b3 = this.get(2, 1) * this.get(3, 2) - this.get(2, 2) * this.get(3, 1);
+  let b4 = this.get(2, 1) * this.get(3, 3) - this.get(2, 3) * this.get(3, 1);
+  let b5 = this.get(2, 2) * this.get(3, 3) - this.get(2, 3) * this.get(3, 2);
+
+  let determinant = a0 * b5 - a1 * b4 + a2 * b3 + a3 * b2 - a4 * b1 + a5 * b0;
+
+  if (determinant != 0) {
+    let inverseDeterminant = 1 / determinant;
+    m.set(0, 0, (+this.get(1, 1) * b5 - this.get(1, 2) * b4 + this.get(1, 3) * b3) * inverseDeterminant);
+    m.set(0, 1, (-this.get(0, 1) * b5 + this.get(0, 2) * b4 - this.get(0, 3) * b3) * inverseDeterminant);
+    m.set(0, 2, (+this.get(3, 1) * a5 - this.get(3, 2) * a4 + this.get(3, 3) * a3) * inverseDeterminant);
+    m.set(0, 3, (-this.get(2, 1) * a5 + this.get(2, 2) * a4 - this.get(2, 3) * a3) * inverseDeterminant);
+    m.set(1, 0, (-this.get(1, 0) * b5 + this.get(1, 2) * b2 - this.get(1, 3) * b1) * inverseDeterminant);
+    m.set(1, 1, (+this.get(0, 0) * b5 - this.get(0, 2) * b2 + this.get(0, 3) * b1) * inverseDeterminant);
+    m.set(1, 2, (-this.get(3, 0) * a5 + this.get(3, 2) * a2 - this.get(3, 3) * a1) * inverseDeterminant);
+    m.set(1, 3, (+this.get(2, 0) * a5 - this.get(2, 2) * a2 + this.get(2, 3) * a1) * inverseDeterminant);
+    m.set(2, 0, (+this.get(1, 0) * b4 - this.get(1, 1) * b2 + this.get(1, 3) * b0) * inverseDeterminant);
+    m.set(2, 1, (-this.get(0, 0) * b4 + this.get(0, 1) * b2 - this.get(0, 3) * b0) * inverseDeterminant);
+    m.set(2, 2, (+this.get(3, 0) * a4 - this.get(3, 1) * a2 + this.get(3, 3) * a0) * inverseDeterminant);
+    m.set(2, 3, (-this.get(2, 0) * a4 + this.get(2, 1) * a2 - this.get(2, 3) * a0) * inverseDeterminant);
+    m.set(3, 0, (-this.get(1, 0) * b3 + this.get(1, 1) * b1 - this.get(1, 2) * b0) * inverseDeterminant);
+    m.set(3, 1, (+this.get(0, 0) * b3 - this.get(0, 1) * b1 + this.get(0, 2) * b0) * inverseDeterminant);
+    m.set(3, 2, (-this.get(3, 0) * a3 + this.get(3, 1) * a1 - this.get(3, 2) * a0) * inverseDeterminant);
+    m.set(3, 3, (+this.get(2, 0) * a3 - this.get(2, 1) * a1 + this.get(2, 2) * a0) * inverseDeterminant);
+  } else {
+    throw Error('Matrix is singular.');
+  }
+
+  return m;
 }
 
 

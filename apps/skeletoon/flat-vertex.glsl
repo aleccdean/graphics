@@ -7,9 +7,11 @@ in vec3 position;
 in vec3 normal;
 in vec4 weights;
 in vec4 joints;
+in vec3 color;
 
 out vec3 mixPositionEye;
 out vec3 mixNormalEye;
+out vec3 fragColor;
 
 void main() {
   mat4 poseFromModel = 
@@ -20,4 +22,5 @@ void main() {
   gl_Position = clipFromEye * eyeFromWorld * worldFromModel * poseFromModel * vec4(position, 1.0);
   mixPositionEye = (eyeFromWorld * worldFromModel * vec4(position, 1.0)).xyz;
   mixNormalEye = (eyeFromWorld * worldFromModel * vec4(normal, 0.0)).xyz;
+  fragColor = color;
 }
