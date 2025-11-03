@@ -127,7 +127,7 @@ async function initialize() {
 
   window.addEventListener('pointerdown', onPointerDown);
 
-  window.addEventListener('pointerup', onPointerUp);
+  //window.addEventListener('pointerup', onPointerUp);
 
   resizeCanvas();  
   requestAnimationFrame(animate);
@@ -234,7 +234,7 @@ function onKeyUp(event: KeyboardEvent) {
 }
 
 function onPointerDown(event: PointerEvent){
-  window.removeEventListener('pointermove', onPointerMove);
+  //window.removeEventListener('pointermove', onPointerMove);
   const mousePixel = new Vector4(
     event.clientX,
     canvas.height - 1 - event.clientY,
@@ -271,7 +271,7 @@ function onMouseUp(event: MouseEvent) {
   let rayEnd = mouseWorld;
   */
 }
-
+/*
 function onPointerUp(event: PointerEvent){
   window.removeEventListener('pointermove', onPointerMove);
 }
@@ -279,6 +279,7 @@ function onPointerUp(event: PointerEvent){
 function onPointerMove(event: PointerEvent){
 
 }
+*/
 // TODO: add event listeners
 
 window.addEventListener('load', () => initialize());
