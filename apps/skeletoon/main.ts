@@ -24,7 +24,7 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  model = await gltf.Model.readFromUrl('model/Snowman2.gltf');
+  model = await gltf.Model.readFromUrl('model/Snowman.gltf');
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
@@ -48,9 +48,9 @@ async function initialize() {
   
 
 
-  lightPosition = new Vector3(10.0, 2.0, -5.0);
+  lightPosition = new Vector3(0.0, -4.0, 5.0);
   eyeFromWorld = Matrix4.identity();
-  eyeFromWorld = eyeFromWorld.multiplyMatrix(Matrix4.translate(0, 0, -10));
+  eyeFromWorld = eyeFromWorld.multiplyMatrix(Matrix4.translate(0, -3, -5));
 
   // Initialize the matrix ONCE
   worldFromModel = Matrix4.identity();
@@ -99,7 +99,7 @@ function render() {
   const lightPositionEye = eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
   shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
-  shaderProgram.setUniform3f("albedo", 1.0, 0.0, 0.0);
+  shaderProgram.setUniform3f("albedo", 0.0, 0.0, 0.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 0.0, 0.0);
   shaderProgram.setUniform1f("ambientFactor", 0.8);
   shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);

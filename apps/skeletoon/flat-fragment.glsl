@@ -25,10 +25,10 @@ void main() {
   vec3 eyeDirection = normalize(-mixPositionEye);
   vec3 halfDirection = normalize(eyeDirection + lightDirection);
   float specularity = pow(max(0.0, dot(halfDirection, normal)), shininess);
-  vec3 specular = specularity * specularColor;
+  vec3 specular = specularity * fragColor;
 
 
   vec3 rgb = ambient + diffuse + specular;
-  //fragmentColor = vec4(rgb, 1.0);
-  fragmentColor = vec4(fragColor, 1.0);
+  fragmentColor = vec4(rgb, 1.0);
+  //fragmentColor = vec4(fragColor, 1.0);
 }

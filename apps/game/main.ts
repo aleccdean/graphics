@@ -75,8 +75,6 @@ async function initialize() {
     cameraRight.yaw(-event.movementX * 0.5);
     cameraRight.pitch(-event.movementY * 0.5);
     // console.log(camera.eyeFromWorld);
-    cameraLeft.yaw(-event.movementX * 0.5);
-    cameraLeft.pitch(-event.movementY * 0.5);
     renderRight();
     renderLeft();
   }
@@ -101,8 +99,8 @@ function renderRight() {
   shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("ambientFactor", 0.1);
-  shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
-  shaderProgram.setUniform1f("shininess", 1.0);
+  //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
+  //shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements)
@@ -127,8 +125,8 @@ function renderLeft() {
   shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("ambientFactor", 0.1);
-  shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
-  shaderProgram.setUniform1f("shininess", 1.0);
+  //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
+  //shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelLeft.elements)
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements)
@@ -155,6 +153,7 @@ function animate(now: DOMHighResTimeStamp) {
   const deltaSeconds = elapsed / 1000;               // convert ms -> s
   const moveSpeed = 10;                             // units per second
   const turnSpeedDeg = 90;                           // degrees per second
+  animateGamepad(deltaSeconds, turnSpeedDeg, moveSpeed);
   cameraRight.advance(verticalRight * deltaSeconds * moveSpeed);
   cameraRight.strafe(horizontalRight * deltaSeconds * moveSpeed);
   cameraLeft.advance(verticalLeft * deltaSeconds * moveSpeed);
@@ -170,20 +169,72 @@ function animate(now: DOMHighResTimeStamp) {
   then = now;
 }
 
-function animateGamepad(_now: DOMHighResTimeStamp) {
+
+function animateGamepad(deltaSeconds: number, turnSpeedDeg: number, moveSpeed: number) {
   const gamepads = navigator.getGamepads();
   const gamepadLeft = gamepads[0];
-  const gamepadRight = gamepads[0];
+  const gamepadRight = gamepads[1];
   if (gamepadLeft) {
-    const isPressed = gamepadLeft.buttons[3].pressed;
-    //axes under label named axes
-    //console.log(gamepad.axes[0]);
-    if(gamepadLeft.axes[0] > 0.1 ) {
-    }
-
-  //console.log(gamepads);
+        //first 4 control moving around
+        if(gamepadLeft.axes[0] > 0.1 ) {
+          cameraLeft.strafe(gamepadLeft.axes[0] * deltaSeconds * moveSpeed);
+        }
+        if(gamepadLeft.axes[0] < -0.1 ) {
+          cameraLeft.strafe(gamepadLeft.axes[0] * deltaSeconds * moveSpeed);
+        }
+        if(gamepadLeft.axes[1] > 0.1 ) {
+          cameraLeft.advance(-gamepadLeft.axes[1] * deltaSeconds * moveSpeed);
+        }
+        if(gamepadLeft.axes[1] < -0.1 ) {
+          cameraLeft.advance(-gamepadLeft.axes[1] * deltaSeconds * moveSpeed);
+        } 
+        //next 4 control looking around
+        if(gamepadLeft.axes[2] > 0.1 ) { 
+          cameraLeft.yaw(-gamepadLeft.axes[2] * deltaSeconds * turnSpeedDeg);
+          renderLeft();
+        }
+        if(gamepadLeft.axes[2] < -0.1 ) {
+          cameraLeft.yaw(-gamepadLeft.axes[2] * deltaSeconds * turnSpeedDeg);
+        }
+        if(gamepadLeft.axes[3] > 0.1 ) {
+          cameraLeft.pitch(-gamepadLeft.axes[3] * deltaSeconds * turnSpeedDeg);
+        }
+        if(gamepadLeft.axes[3] < -0.1 ) {
+          cameraLeft.pitch(-gamepadLeft.axes[3] * deltaSeconds * turnSpeedDeg);
+        }
+        //add button features
   }
-  requestAnimationFrame(animate);
+  if ( gamepadRight) {
+        //first 4 control moving around
+        if( gamepadRight.axes[0] > 0.1 ) {
+          cameraLeft.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
+        }
+        if( gamepadRight.axes[0] < -0.1 ) {
+          cameraLeft.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
+        }
+        if( gamepadRight.axes[1] > 0.1 ) {
+          cameraLeft.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
+        }
+        if( gamepadRight.axes[1] < -0.1 ) {
+          cameraLeft.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
+        } 
+        //next 4 control looking around
+        if( gamepadRight.axes[2] > 0.1 ) { 
+          cameraLeft.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
+          renderLeft();
+        }
+        if( gamepadRight.axes[2] < -0.1 ) {
+          cameraLeft.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
+        }
+        if( gamepadRight.axes[3] > 0.1 ) {
+          cameraLeft.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
+        }
+        if( gamepadRight.axes[3] < -0.1 ) {
+          cameraLeft.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
+        }
+        //add button features
+  }
+  resizeCanvas();
 }
 
 
@@ -199,11 +250,7 @@ function onKeyDown(event: KeyboardEvent) {
     horizontalRight = -1;
   } else if (key === 'ArrowRight') {
     horizontalRight = 1;
-  } else if (key === 'q') {
-    turnRight = 1;
-  } else if (key === 'e') {
-    turnRight = -1;
-  } else if(key == 'w') {
+  }  else if(key == 'w') {
     verticalLeft = 1;
   } else if (key === 's') {
     verticalLeft = -1;
