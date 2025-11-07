@@ -4,7 +4,7 @@ uniform vec3 diffuseColor;
 uniform float ambientFactor;
 uniform vec3 specularColor;
 uniform float shininess;
-uniform sampler2D crateTexture;
+uniform sampler2D xorTexture;
 
 in vec3 mixPositionEye;
 in vec3 mixNormalEye;
@@ -29,6 +29,9 @@ void main() {
   vec3 specular = specularity * specularColor;
 
 
-  vec3 rgb = ambient + diffuse + specular;
-  fragmentColor = texture(crateTexture, mixTexPosition);
+  //vec3 rgb = ambient + diffuse + specular;
+  //vec3 rgb = vec3(mixTexPosition, 0.0);
+  vec3 rgb = texture(xorTexture, mixTexPosition).rgb;
+  fragmentColor = vec4(rgb, 1.0);
+
 }

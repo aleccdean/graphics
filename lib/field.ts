@@ -38,11 +38,13 @@ export class Field2 {
 
   toTrimesh(factors: Vector3) {
     const positions: Vector3[] = [];
+    const textures: Vector3[] = [];
 
     for (let z = 0; z < this.height; ++z) {
       for (let x = 0; x < this.width; ++x) {
         const y = this.get2(x, z);
         positions.push(new Vector3(x, y, z).multiply(factors));
+        textures.push(new Vector3(x, y, z).multiply(factors));
       }
     }
 
@@ -60,7 +62,7 @@ export class Field2 {
       }
     }
 
-    return new Trimesh(positions, faces);
+    return new Trimesh(positions, faces, textures);
   }
 
 

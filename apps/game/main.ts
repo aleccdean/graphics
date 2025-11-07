@@ -45,7 +45,8 @@ async function initialize() {
   // console.log(camera.right);
 
   
-  
+  const texImage = await fetchImage('textures/grass.jpg')
+  const tex = createRgbaTexture2d(texImage.width, texImage.height, texImage);
   
   worldFromModelRight = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
   worldFromModelLeft = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
@@ -53,6 +54,7 @@ async function initialize() {
   hMap.computeNormals();
   attributes.addAttribute('position', hMap.vertexCount, 3, hMap.positionBuffer());
   attributes.addAttribute('normal', hMap.vertexCount, 3, hMap.normalBuffer());
+  attributes.addAttribute('texPosition', hMap.textureCount!, 3, hMap.textureBuffer());
   attributes.addIndices(hMap.faceBuffer());
 
   const vertexSource = await fetchText('flat-vertex.glsl');
@@ -92,6 +94,9 @@ function renderRight() {
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
+  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   const lightPositionEye = cameraRight.eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
@@ -101,6 +106,7 @@ function renderRight() {
   shaderProgram.setUniform1f("ambientFactor", 0.1);
   //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   //shaderProgram.setUniform1f("shininess", 1.0);
+  shaderProgram.setUniform1i("grassTexture", 0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements)
@@ -118,6 +124,8 @@ function renderLeft() {
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
+  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
   const lightPositionEye = cameraLeft.eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
@@ -127,6 +135,7 @@ function renderLeft() {
   shaderProgram.setUniform1f("ambientFactor", 0.1);
   //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   //shaderProgram.setUniform1f("shininess", 1.0);
+  shaderProgram.setUniform1i("grassTexture", 0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelLeft.elements)
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements)
@@ -277,6 +286,34 @@ function onKeyUp(event: KeyboardEvent) {
     horizontalLeft = 0;
   } 
 }
-// TODO: add event listeners
+
+
+function generateRgbaImage(width: number, height: number) {
+  const n = width * height * 4;
+  const pixels = new Uint8ClampedArray(n);
+
+  for (let r = 0; r < height; ++r) {
+    for (let c = 0; c < width; ++c) {
+      let i = (r * width + c) * 4;
+      pixels[i + 0] = r ^ c;
+      pixels[i + 1] = 128;
+      pixels[i + 2] = 0;
+      pixels[i + 3] = 255;
+    }
+  }
+
+  return pixels;
+}
+
+function createRgbaTexture2d(width: number, height: number, image: HTMLImageElement | Uint8ClampedArray, textureUnit: GLenum = gl.TEXTURE0) {
+  gl.activeTexture(textureUnit);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, image as any);
+
+  gl.generateMipmap(gl.TEXTURE_2D);
+  return texture;
+}
 
 window.addEventListener('load', () => initialize());

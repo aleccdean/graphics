@@ -6,12 +6,21 @@ export class Trimesh {
     min!: Vector3;   // note the exclamation points!
     max!: Vector3;
     normals: Vector3[] | null;
+    textures?: Vector3[];
 
-    constructor(positions: Vector3[], faces: number[][]) {
-      this.positions = positions;
-      this.faces = faces;
-      this.normals = null;
-      this.computeMinMax();
+    constructor(positions: Vector3[], faces: number[][], textures?: Vector3[]) {
+      if(textures) {
+        this.textures = textures;
+        this.positions = positions;
+        this.faces = faces;
+        this.normals = null;
+        this.computeMinMax();
+      } else {
+        this.positions = positions;
+        this.faces = faces;
+        this.normals = null;
+        this.computeMinMax();
+      }
     }
 
     get vertexCount() {
@@ -20,6 +29,10 @@ export class Trimesh {
 
     get faceCount() {
         return this.faces.length;
+    }
+
+    get textureCount() {
+      return this.textures?.length;
     }
 
     computeMinMax() {
@@ -75,6 +88,11 @@ export class Trimesh {
 
     positionBuffer() {
         const xyzs = this.positions.flatMap(p => p.xyz);
+        return new Float32Array(xyzs);
+    }
+
+    textureBuffer() { // Need to test, might not work
+        const xyzs = this.textures!.flatMap(p => p.xyz);
         return new Float32Array(xyzs);
     }
 

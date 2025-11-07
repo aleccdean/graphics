@@ -25,11 +25,33 @@ async function initialize() {
   const unitCount = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
   console.log(unitCount);
 
-  const model = await Gltf.readFromUrl('bumpy/bumpy.gltf');
+
+  const positions = new Float32Array([
+    -1, -1, 0,
+    1, -1, 0,
+    -1, 1, 0,
+    1, 1, 0
+  ]);
+
+  const texPositions = new Float32Array([
+    0, 0, 
+    1, 0,
+    0, 1,
+    1, 1,
+  ]);
+
+
+  const indices = new Uint32Array([
+    0, 1, 2,
+    1, 3, 2,
+  ]);
+
   const attributes = new VertexAttributes();
-  attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
-  attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
-  attributes.addIndices(new Uint32Array(model.meshes[0].indices!.buffer));
+  attributes.addAttribute('position', 4, 3, positions);
+  attributes.addAttribute('texPosition', 4, 3, positions);
+  attributes.addIndices(indices);
+
+  loadTexture();
 
   vao = new VertexArray(shaderProgram, attributes);
 
@@ -58,7 +80,7 @@ async function initialize() {
   });
 
   resizeCanvas();  
-  requestAnimationFrame(animate);
+  //requestAnimationFrame(animate);
 }
 
 function animate() {
@@ -77,20 +99,19 @@ function render() {
   
   const lightPositionEye = eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
-  /*
-uniform float ambientFactor;
-uniform vec3 specularColor;
-uniform float shininess;
-  */
+
   shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
   shaderProgram.setUniform3f("albedo", 0.0, 0.0, 0.0);
   shaderProgram.setUniform3f("diffuseColor", 0.0, 0.0, 0.0);
   shaderProgram.setUniform1f("ambientFactor", 0.5);
   shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("shininess", 1.0);
+
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', eyeFromWorld.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+  shaderProgram.setUniform1i("xorTexture", 0);
+
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
   vao.unbind();
@@ -107,6 +128,25 @@ function resizeCanvas() {
   clipFromEye = Matrix4.perspective(75, aspectRatio, 0.1, 15);
 
   render();
+}
+
+function loadTexture() {
+  const width = 256;
+  const height = 256;
+  const n = width * height * 4;
+  const pixels = new Uint8ClampedArray(n);
+
+  for(let r = 0; r < height; ++r) {
+    for (let c = 0; c < width; ++c) {
+      let i = (r * width +c) * 4;
+      pixels[i + 0] = r ^ c;
+      pixels[i + 1] = 0;
+      pixels[i + 2] = 0;
+      pixels[i + 3] = 255;
+    }
+  }
+
+   createRgbaTexture2d(width, height, pixels);
 }
 
 function generateRgbaImage(width: number, height: number) {
@@ -144,19 +184,7 @@ function createRgbaTexture2d(width: number, height: number, image: HTMLImageElem
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  // Narrow the union so we call the correct texImage2D overload:
-  // - If image is an HTMLImageElement (TexImageSource), use the signature that takes a source.
-  // - If image is a Uint8ClampedArray, use the ArrayBufferView signature with explicit width/height.
-  if (image instanceof HTMLImageElement) {
-    // texImage2D(target, level, internalformat, format, type, source)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-  } else {
-    // image is Uint8ClampedArray -> ArrayBufferView overload
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    // If you actually want a single-channel grayscale texture, replace the line above with the LUMINANCE call below
-    // (or provide a separate function). Left commented to avoid double-uploading incompatible formats.
-    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, width, height, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, image); // FOR GRAYSCALE
-  }
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, image as any);
 
   gl.generateMipmap(gl.TEXTURE_2D);
   return texture;

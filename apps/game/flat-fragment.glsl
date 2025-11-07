@@ -4,9 +4,11 @@ uniform vec3 diffuseColor;
 uniform float ambientFactor;
 uniform vec3 specularColor;
 uniform float shininess;
+uniform sampler2D grassTexture;
 
 in vec3 mixPositionEye;
 in vec3 mixNormalEye;
+in vec2 mixTexPosition;
 
 out vec4 fragmentColor;
 
@@ -23,6 +25,7 @@ void main() {
 
 
 
-  vec3 rgb = ambient + diffuse;
+  //vec3 rgb = ambient + diffuse;
+  vec3 rgb = texture(grassTexture, mixTexPosition).rgb;
   fragmentColor = vec4(rgb, 1.0);
 }
