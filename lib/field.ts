@@ -44,7 +44,7 @@ export class Field2 {
       for (let x = 0; x < this.width; ++x) {
         const y = this.get2(x, z);
         positions.push(new Vector3(x, y, z).multiply(factors));
-        textures.push(new Vector3(x, y, z).multiply(factors));
+        textures.push(new Vector3(x, y, z).multiply(factors).normalize());
       }
     }
 

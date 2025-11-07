@@ -30,23 +30,19 @@ async function initialize() {
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
   window.gl = canvas.getContext('webgl2') as WebGL2RenderingContext;
 
+  //Read heightmap
   const image = await fetchImage('heightmap.png');
   const scale = new Vector3(1, 100, 1);
   heightmap = Field2.readFromImage(image);
   hMap = heightmap.toTrimesh(scale);
-
-  
-
-  const from = new Vector3(0,2, 0);
-  const to = new Vector3(5, 0, 5);
-  const up = new Vector3(0, 1, 0);
-  cameraRight = new FirstPersonCamera(from, to, heightmap, 1, scale);
-  cameraLeft = new FirstPersonCamera(from, to, heightmap, 1, scale);
-  // console.log(camera.right);
-
-  
-  const texImage = await fetchImage('textures/grass.jpg')
+  //read texture for heightmap
+  const texImage = await fetchImage('textures/grass2.jpg')
   const tex = createRgbaTexture2d(texImage.width, texImage.height, texImage);
+
+
+  //Initialize both player cameras
+  cameraRight = new FirstPersonCamera(new Vector3(0,2, 0), new Vector3(5, 2, 5), heightmap, 1, scale);
+  cameraLeft = new FirstPersonCamera(new Vector3(0,2, 0), new Vector3(5, 2, 5), heightmap, 1, scale);
   
   worldFromModelRight = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
   worldFromModelLeft = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
@@ -94,9 +90,6 @@ function renderRight() {
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
-  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   const lightPositionEye = cameraRight.eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
@@ -104,8 +97,6 @@ function renderRight() {
   shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("ambientFactor", 0.1);
-  //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniform1i("grassTexture", 0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
@@ -124,8 +115,6 @@ function renderLeft() {
   gl.clearColor(0.392, 0.584, 0.929, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
-  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
   const lightPositionEye = cameraLeft.eyeFromWorld.multiplyPosition(lightPosition);
   shaderProgram.bind();
@@ -133,8 +122,6 @@ function renderLeft() {
   shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("ambientFactor", 0.1);
-  //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniform1i("grassTexture", 0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelLeft.elements)
@@ -146,10 +133,11 @@ function renderLeft() {
 }
 
 function resizeCanvas() {
-  canvas.width = canvas.clientWidth / 2;
+  canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
-  const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-  clipFromEye = Matrix4.perspective(90, aspectRatio, 0.01, 2000);
+  const halfWidth = canvas.width /2;
+  const aspectRatio = halfWidth / canvas.clientHeight;
+  clipFromEye = Matrix4.perspective(90, aspectRatio, 0.1, 2000);
   renderRight();
   renderLeft();
 }
@@ -200,7 +188,6 @@ function animateGamepad(deltaSeconds: number, turnSpeedDeg: number, moveSpeed: n
         //next 4 control looking around
         if(gamepadLeft.axes[2] > 0.1 ) { 
           cameraLeft.yaw(-gamepadLeft.axes[2] * deltaSeconds * turnSpeedDeg);
-          renderLeft();
         }
         if(gamepadLeft.axes[2] < -0.1 ) {
           cameraLeft.yaw(-gamepadLeft.axes[2] * deltaSeconds * turnSpeedDeg);
@@ -216,30 +203,29 @@ function animateGamepad(deltaSeconds: number, turnSpeedDeg: number, moveSpeed: n
   if ( gamepadRight) {
         //first 4 control moving around
         if( gamepadRight.axes[0] > 0.1 ) {
-          cameraLeft.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
+          cameraRight.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
         }
         if( gamepadRight.axes[0] < -0.1 ) {
-          cameraLeft.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
+          cameraRight.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
         }
         if( gamepadRight.axes[1] > 0.1 ) {
-          cameraLeft.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
+          cameraRight.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
         }
         if( gamepadRight.axes[1] < -0.1 ) {
-          cameraLeft.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
+          cameraRight.advance(- gamepadRight.axes[1] * deltaSeconds * moveSpeed);
         } 
         //next 4 control looking around
         if( gamepadRight.axes[2] > 0.1 ) { 
-          cameraLeft.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
-          renderLeft();
+          cameraRight.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
         }
         if( gamepadRight.axes[2] < -0.1 ) {
-          cameraLeft.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
+          cameraRight.yaw(- gamepadRight.axes[2] * deltaSeconds * turnSpeedDeg);
         }
         if( gamepadRight.axes[3] > 0.1 ) {
-          cameraLeft.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
+          cameraRight.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
         }
         if( gamepadRight.axes[3] < -0.1 ) {
-          cameraLeft.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
+          cameraRight.pitch(- gamepadRight.axes[3] * deltaSeconds * turnSpeedDeg);
         }
         //add button features
   }
@@ -288,28 +274,11 @@ function onKeyUp(event: KeyboardEvent) {
 }
 
 
-function generateRgbaImage(width: number, height: number) {
-  const n = width * height * 4;
-  const pixels = new Uint8ClampedArray(n);
-
-  for (let r = 0; r < height; ++r) {
-    for (let c = 0; c < width; ++c) {
-      let i = (r * width + c) * 4;
-      pixels[i + 0] = r ^ c;
-      pixels[i + 1] = 128;
-      pixels[i + 2] = 0;
-      pixels[i + 3] = 255;
-    }
-  }
-
-  return pixels;
-}
 
 function createRgbaTexture2d(width: number, height: number, image: HTMLImageElement | Uint8ClampedArray, textureUnit: GLenum = gl.TEXTURE0) {
   gl.activeTexture(textureUnit);
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
-
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, image as any);
 
   gl.generateMipmap(gl.TEXTURE_2D);
