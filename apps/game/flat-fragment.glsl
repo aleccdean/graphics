@@ -5,10 +5,14 @@ uniform float ambientFactor;
 uniform vec3 specularColor;
 uniform float shininess;
 uniform sampler2D grassTexture;
+uniform sampler2D modelTexture;
+uniform int useModelTexture;
+uniform int useVertexColor;
 
 in vec3 mixPositionEye;
 in vec3 mixNormalEye;
 in vec2 mixTexPosition;
+in vec3 mixColor;
 
 out vec4 fragmentColor;
 
@@ -25,7 +29,14 @@ void main() {
 
 
 
-  //vec3 rgb = ambient + diffuse;
-  vec3 rgb = texture(grassTexture, mixTexPosition).rgb;
+  // Choose final color source: model texture -> vertex color -> terrain texture
+  vec3 rgb;
+  if (useModelTexture == 1) {
+    rgb = texture(modelTexture, mixTexPosition).rgb;
+  } else if (useVertexColor == 1) {
+    rgb = mixColor;
+  } else {
+    rgb = texture(grassTexture, mixTexPosition).rgb;
+  }
   fragmentColor = vec4(rgb, 1.0);
 }

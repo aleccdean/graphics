@@ -11,7 +11,10 @@ export class FirstPersonCamera {
     field: Field2;
     offset: number;
     factors: Vector3;
-
+    private verticalVelocity: number = 0; 
+    private isOnGround: boolean = true; 
+    gravity: number = -30.0; //Affects fall speed
+    jumpSpeed: number = 10.0; //Affects height of jump
 
     constructor(from: Vector3, to: Vector3, field: Field2, offset: number, factors: Vector3) {
         this.forward = to.subtract(from).normalize();
@@ -20,7 +23,7 @@ export class FirstPersonCamera {
         this.field = field;
         this.offset = offset;
         this.factors = factors;
-        this.adjustY();
+        this.adjustY(); // set starting Y to ground + offset
         this.reorient();
     }
 
@@ -33,23 +36,70 @@ export class FirstPersonCamera {
         );
     }  
 
+    keepInTerrain() {
+        const maxX = (this.field.width - 1) * this.factors.x;
+        const maxZ = (this.field.height - 1) * this.factors.z;
+        if (this.from.x < 0) this.from.x = 0;
+        else if (this.from.x > maxX) this.from.x = maxX;
+        if (this.from.z < 0) this.from.z = 0;
+        else if (this.from.z > maxZ) this.from.z = maxZ;
+    }
+
     adjustY() {
         const x = this.from.x / this.factors.x;
         const z = this.from.z / this.factors.z;
         const height = this.field.blerp(x, z);
-        this.from.y = height * this.factors.y + this.offset;
+        const groundY = height * this.factors.y + this.offset;
+        if (this.isOnGround) {
+            this.from.y = groundY;
+            this.verticalVelocity = 0;
+        } else {
+            // while airborne do not override this.from.y
+        }
     }
 
+    // Render jumping smoothly(called repeatedly in animate)
+    update(deltaSeconds: number) {
+        if (!this.isOnGround) {
+            this.verticalVelocity += this.gravity * deltaSeconds;
+            this.from = this.from.add(new Vector3(0, this.verticalVelocity * deltaSeconds, 0));
+            this.keepInTerrain();
+            const x = this.from.x / this.factors.x;
+            const z = this.from.z / this.factors.z;
+            const height = this.field.blerp(x, z);
+            const groundY = height * this.factors.y + this.offset;
+            if (this.from.y <= groundY) { //If on ground
+                this.from.y = groundY;
+                this.verticalVelocity = 0;
+                this.isOnGround = true;
+            }
+            this.reorient();
+        } else {
+            this.keepInTerrain();
+            this.adjustY();
+            this.reorient();
+        }
+    }
+
+
+    jump() {
+        if (this.isOnGround) {
+            this.verticalVelocity = this.jumpSpeed;
+            this.isOnGround = false;
+        }
+    }
 
 
     strafe(distance: number) {
         this.from = this.from.add(this.right.scalarMultiply(distance));
+        this.keepInTerrain();
         this.adjustY();
         this.reorient();
     }
 
     advance(distance: number) {
         this.from = this.from.add(this.forward.scalarMultiply(distance));
+        this.keepInTerrain();
         this.adjustY();
         this.reorient();
     }

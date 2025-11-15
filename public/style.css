@@ -29,3 +29,22 @@ body {
     justify-items: end;
     z-index: 1;
   }
+
+  /* Small dot for aiming: centered on the right viewport */
+  #crosshair-right,
+  #crosshair-left {
+    position: fixed;
+    width: 4px;
+    height: 4px;
+    background: #000000;
+    border-radius: 50%;
+    box-shadow: 0 0 2px rgba(0,0,0,0.8);
+    pointer-events: none;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+  }
+
+  /* center of right half */
+  #crosshair-right { left: 75vw; top: 50vh; }
+  /* center of left half */
+  #crosshair-left { left: 25vw; top: 50vh; }
