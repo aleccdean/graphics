@@ -213,4 +213,19 @@ function padToPot(image: HTMLImageElement) {
   return context.getImageData(0, 0, canvas.width, canvas.height);
 }
 
+
+// noise reading
+function createRedTexture3d(width: number, height: number, depth: number, texels: Uint8ClampedArray, textureUnit: GLenum = gl.TEXTURE0) {
+  gl.activeTexture(textureUnit);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D, texture);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, width, height, depth, 0, gl.RED, gl.UNSIGNED_BYTE, texels);
+  return texture;
+}
+
 window.addEventListener('load', () => initialize());
