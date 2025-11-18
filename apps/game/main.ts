@@ -15,8 +15,11 @@ let shaderProgram: ShaderProgram;
 let clipFromEye: Matrix4;
 let vao: VertexArray;
 let modelInstances: SceneModel[] = []; //List of all models in scene 
+// Create variables for left and right players
 let cameraRightModel: SceneModel | null = null;
 let cameraLeftModel: SceneModel | null = null;
+let cameraRightGun: SceneModel | null = null;
+let cameraLeftGun: SceneModel | null = null;
 let worldFromModelRight: Matrix4;
 let worldFromModelLeft: Matrix4;
 let cameraRight: FirstPersonCamera;
@@ -46,7 +49,7 @@ let crosshairRight: HTMLDivElement | null = null;
 let lastHitRightSec = -Infinity;
 let lastHitLeftSec = -Infinity;
 let hitCooldownSec = 1.0;
-let hitRadius = 2.0;
+let hitRadius = 3.5;
 // shoot cooldown
 let lastShootRightSec = -Infinity;
 let lastShootLeftSec = -Infinity;
@@ -70,8 +73,8 @@ async function initialize() {
   grassTexture = createRgbaTexture2d(texImage.width, texImage.height, texImage);
 
   //Initialize both player cameras
-  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 1.5, scale);
-  cameraLeft = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 1.5, scale);
+  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 3, scale);
+  cameraLeft = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 3, scale);
   
   worldFromModelRight = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
   worldFromModelLeft = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
@@ -144,6 +147,7 @@ function renderRight() {
   }
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
+  shaderProgram.setUniform1i('animation', 0);
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements)
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
@@ -152,6 +156,17 @@ function renderRight() {
     for (const inst of modelInstances) {
       if (inst === cameraRightModel) continue; // don't draw right player's own snowman in right view
       shaderProgram.setUniformMatrix4fv('worldFromModel', inst.worldFromModel.elements);
+      // Default: no animation
+      shaderProgram.setUniform1i('animation', 0);
+      // Upload joint transforms 
+      if (inst.model && inst.model.skins && inst.model.skins.length > 0) {
+        const joints = inst.model.skinTransforms(0, true);
+        shaderProgram.setUniform1i('animation', 1);
+        for (let i = 0; i < 32; i++) {
+          const mat = i < joints.length ? joints[i] : Matrix4.identity();
+          shaderProgram.setUniformMatrix4fv(`jointTransforms[${i}]`, mat.elements);
+        }
+      }
       if (inst.modelTexture) {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, inst.modelTexture);
@@ -200,6 +215,7 @@ function renderLeft() {
   }
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelLeft.elements)
+  shaderProgram.setUniform1i('animation', 0);
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements)
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
@@ -208,6 +224,17 @@ function renderLeft() {
     for (const inst of modelInstances) {
       if (inst === cameraLeftModel) continue; // don't draw left player's own snowman in left view
       shaderProgram.setUniformMatrix4fv('worldFromModel', inst.worldFromModel.elements);
+      //Default: No animation
+      shaderProgram.setUniform1i('animation', 0);
+      //Upload animation
+      if (inst.model && inst.model.skins && inst.model.skins.length > 0) {
+        const joints = inst.model.skinTransforms(0, true);
+        shaderProgram.setUniform1i('animation', 1);
+        for (let i = 0; i < 32; i++) {
+          const mat = i < joints.length ? joints[i] : Matrix4.identity();
+          shaderProgram.setUniformMatrix4fv(`jointTransforms[${i}]`, mat.elements);
+        }
+      }
       if (inst.modelTexture) {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, inst.modelTexture);
@@ -232,23 +259,30 @@ function renderLeft() {
 async function models() {
   // Read the glTF and wrap the first mesh in a SceneModel which builds its own VAO
   const model = await gltf.Model.readFromUrl('models/Snowman.gltf');
+  const gun = await gltf.Model.readFromUrl('models/Gun.gltf')
   const count = 5;
   //Creates count random models
   modelInstances = [];
   for (let i = 0; i < count; ++i) {
-    const inst = new SceneModel(model.meshes[0], shaderProgram, true, 20, heightmap, terrainScale);
+    const inst = new SceneModel(model, shaderProgram, true, 20, heightmap, terrainScale);
     modelInstances.push(inst);
   }
   
   //Create player characters
   if (cameraRight && cameraLeft) {
-    cameraRightModel = new SceneModel(model.meshes[0], shaderProgram, false, 20, heightmap, terrainScale);
+    cameraRightModel = new SceneModel(model, shaderProgram, false, 20, heightmap, terrainScale);
+    cameraRightGun = new SceneModel(gun, shaderProgram, false, 20, heightmap, terrainScale);
     cameraRightModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraRight.from.x, cameraRight.from.y, cameraRight.from.z));
+    cameraRightGun.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraRight.from.x + 1, cameraRight.from.y, cameraRight.from.z + 1)).multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25)).multiplyMatrix(Matrix4.rotateY(90));
     modelInstances.push(cameraRightModel);
+    modelInstances.push(cameraRightGun);
 
-    cameraLeftModel = new SceneModel(model.meshes[0], shaderProgram, false, 20, heightmap, terrainScale);
+    cameraLeftModel = new SceneModel(model, shaderProgram, false, 20, heightmap, terrainScale);
+    cameraLeftGun = new SceneModel(gun, shaderProgram, false, 20, heightmap, terrainScale);
     cameraLeftModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraLeft.from.x, cameraLeft.from.y, cameraLeft.from.z));
+    cameraLeftGun.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraLeft.from.x + 1, cameraLeft.from.y, cameraLeft.from.z + 1)).multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25)).multiplyMatrix(Matrix4.rotateY(90));
     modelInstances.push(cameraLeftModel);
+    modelInstances.push(cameraLeftGun);
   }
 
 }
@@ -269,6 +303,13 @@ function animate(now: DOMHighResTimeStamp) {
   const elapsed = then ? now - then : 0;
   const deltaSeconds = elapsed / 1000; 
 
+  // Advance animation time for all models (milliseconds elapsed)
+  for (const inst of modelInstances) {
+    if (inst.model && typeof inst.model.tick === 'function') {
+      inst.model.tick(elapsed);
+    }
+  }
+
   //Keyboard controls To be removed
   cameraRight.update(deltaSeconds);
   cameraLeft.update(deltaSeconds);
@@ -285,18 +326,36 @@ function animate(now: DOMHighResTimeStamp) {
   }
   // end of keyboard controls
 
-  // Update camera-anchored models so they follow their respective cameras.
-  if (cameraRightModel && cameraRight) {
+  // Update camera models so they follow their respective cameras.
+  if (cameraRightModel && cameraRightGun && cameraRight) {
     cameraRight.reorient();
-    cameraRightModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraRight.from.x, cameraRight.from.y - 1.5, cameraRight.from.z));
+      const yawRight = Math.atan2(cameraRight.forward.z, cameraRight.forward.x) * 180 / Math.PI;
+      cameraRightModel.worldFromModel = Matrix4.identity()
+        .multiplyMatrix(Matrix4.translate(cameraRight.from.x, cameraRight.from.y - 3, cameraRight.from.z))
+        .multiplyMatrix(Matrix4.rotateY(yawRight-90));
+    cameraRightGun.worldFromModel = cameraRightModel.worldFromModel
+        .multiplyMatrix(Matrix4.translate(-1, 2, 0))
+        .multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25))
+        .multiplyMatrix(Matrix4.rotateX(70))
+        .multiplyMatrix(Matrix4.rotateY(-150))
+        .multiplyMatrix(Matrix4.rotateZ(20));
   }
-  if (cameraLeftModel && cameraLeft) {
-    cameraRight.reorient();
-    cameraLeftModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraLeft.from.x, cameraLeft.from.y - 1.5, cameraLeft.from.z));
+  if (cameraLeftModel && cameraLeftGun && cameraLeft) {
+    cameraLeft.reorient();
+      const yawLeft = Math.atan2(cameraLeft.forward.z, cameraLeft.forward.x) * 180 / Math.PI;
+      cameraLeftModel.worldFromModel = Matrix4.identity()
+        .multiplyMatrix(Matrix4.translate(cameraLeft.from.x, cameraLeft.from.y - 3, cameraLeft.from.z))
+        .multiplyMatrix(Matrix4.rotateY(yawLeft-90));
+    cameraLeftGun.worldFromModel = cameraLeftModel.worldFromModel
+        .multiplyMatrix(Matrix4.translate(-1, 2, 0))
+        .multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25))
+        .multiplyMatrix(Matrix4.rotateX(70))
+        .multiplyMatrix(Matrix4.rotateY(-150))
+        .multiplyMatrix(Matrix4.rotateZ(20));
   }
   // Move zombies toward nearest camera
   for (const inst of modelInstances) {
-    if (inst === cameraRightModel || inst === cameraLeftModel) continue;
+    if (inst === cameraRightModel || inst === cameraLeftModel || inst === cameraLeftGun || inst == cameraRightGun) continue;
     const pos = inst.getPosition();
     let target: FirstPersonCamera | null = null;
     if(rightPlayerAlive && leftPlayerAlive) {
@@ -316,7 +375,12 @@ function animate(now: DOMHighResTimeStamp) {
     let newX = pos.x + dir.x * step;
     let newZ = pos.z + dir.z * step;
     inst.setPosition(new Vector3(newX, 0, newZ));
-    // Check if enemy close enough to hit, and if out of cooldown range.
+    // Face movement direction
+    const yawDeg = Math.atan2(dir.z, dir.x) * 180 / Math.PI; // degrees
+    inst.worldFromModel = Matrix4.identity()
+      .multiplyMatrix(Matrix4.translate(inst.position.x, inst.position.y, inst.position.z))
+      .multiplyMatrix(Matrix4.rotateY(yawDeg - 90));
+    // Check if enemy close enough to hit and if out of cooldown range
     if (dist < hitRadius) {
       const nowSec = (now as number) / 1000;
       if (target === cameraLeft) {
@@ -333,7 +397,7 @@ function animate(now: DOMHighResTimeStamp) {
         }
       }
     }
-  
+    inst.animation('head');
   }
   modelInstances = modelInstances.filter(inst => {
     if (inst.health <= 0) {

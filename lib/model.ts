@@ -14,34 +14,40 @@ export class SceneModel {
     worldFromModel: Matrix4;
     modelTexture: WebGLTexture | null = null;
     hasVertexColor: boolean = false;
+    hasJoints: boolean = false;
+    hasWeights: boolean = false;
     field: Field2;
     factors: Vector3;
     position: Vector3;
     health: number;
-    private _mesh: gltf.Mesh; 
+    mesh: gltf.Mesh; 
+    model: gltf.Model;
 
 
-    constructor(mesh: gltf.Mesh, program: ShaderProgram, randomizePosition = true, range = 50, field: Field2, factors: Vector3, modelTexture?: WebGLTexture, health: number = 10) {
-        this._mesh = mesh;
+    constructor(model: gltf.Model, program: ShaderProgram, randomizePosition = true, range = 50, field: Field2, factors: Vector3, modelTexture?: WebGLTexture, health: number = 10) {
+        this.model = model;
+        this.mesh = model.meshes[0];
         this.field = field;
         this.factors = factors;
         this.health = health;
         const attributes = new VertexAttributes();
-        attributes.addAttribute('position', mesh.positions.count, 3, mesh.positions.buffer as Float32Array);
-        attributes.addAttribute('normal', mesh.normals!.count, 3, mesh.normals!.buffer as Float32Array);
-        attributes.addIndices(new Uint32Array(mesh.indices!.buffer));
-        if (mesh.colors) {
-            attributes.addAttribute('color', mesh.colors.count, mesh.colors.componentCount || 3, mesh.colors.buffer as Float32Array);
+        attributes.addAttribute('position', this.mesh.positions.count, 3, this.mesh.positions.buffer as Float32Array);
+        attributes.addAttribute('normal', this.mesh.normals!.count, 3, this.mesh.normals!.buffer as Float32Array);
+        attributes.addIndices(new Uint32Array(this.mesh.indices!.buffer));
+        if (this.mesh.colors) {
+            attributes.addAttribute('color', this.mesh.colors.count, this.mesh.colors.componentCount || 3, this.mesh.colors.buffer as Float32Array);
             this.hasVertexColor = true;
         }
-        if (mesh.texCoord) {
-            attributes.addAttribute('texPosition', mesh.texCoord.count, mesh.texCoord.componentCount || 2, mesh.texCoord.buffer as Float32Array);
+        if (this.mesh.texCoord) {
+            attributes.addAttribute('texPosition', this.mesh.texCoord.count, this.mesh.texCoord.componentCount || 2, this.mesh.texCoord.buffer as Float32Array);
         }
-        if (mesh.weights) {
-            attributes.addAttribute('weights', mesh.weights.count, mesh.weights.componentCount || 4, mesh.weights.buffer as Float32Array);
+        if (this.mesh.weights) {
+            attributes.addAttribute('weights', this.mesh.weights.count, this.mesh.weights.componentCount || 4, this.mesh.weights.buffer as Float32Array);
+            this.hasWeights = true;
         }
-        if (mesh.joints) {
-            attributes.addAttribute('joints', mesh.joints!.count, 4, new Float32Array(mesh.joints!.buffer));
+        if (this.mesh.joints) {
+            attributes.addAttribute('joints', this.mesh.joints!.count, 4, new Float32Array(this.mesh.joints!.buffer));
+            this.hasJoints = true;
         }
 
         // Store optional model texture and create the VAO
@@ -89,7 +95,7 @@ export class SceneModel {
      * max = back-top-right (maxX, maxY, maxZ)
      */
     getWorldBounds(): { min: Vector3; max: Vector3 } {
-        const pos = this._mesh.positions.buffer;
+        const pos = this.mesh.positions.buffer;
         // Transform first vertex to seed
         let p = this.worldFromModel.multiplyPosition(new Vector3(pos[0], pos[1], pos[2]));
         let minX = p.x, minY = p.y, minZ = p.z;
@@ -142,6 +148,10 @@ export class SceneModel {
 
     takeDamage(damage: number) {
         this.health = this.health - damage;
+    }
+
+    animation(animation: string) {
+        this.model.play(animation);
     }
 
 }

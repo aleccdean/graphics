@@ -45,6 +45,9 @@ export class Vector3 {
     add(that: Vector3) {
         return new Vector3(this.x + that.x, this.y + that.y, this.z + that.z);
     }
+    addScalar(factor: number) {
+        return new Vector3(this.x + factor, this.y + factor, this.z + factor);
+    }
 
     subtract(that: Vector3) {
         return new Vector3(this.x - that.x, this.y - that.y, this.z - that.z);
