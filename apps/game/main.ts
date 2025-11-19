@@ -10,6 +10,7 @@ import { FirstPersonCamera } from 'lib/terrainCamera.js';
 import { Field2 } from 'lib/field.js';
 import * as gltf from 'lib/gltf.js';
 import { SceneModel } from 'lib/model.js';
+let then: DOMHighResTimeStamp | null = null;
 let canvas: HTMLCanvasElement;
 let shaderProgram: ShaderProgram;
 let clipFromEye: Matrix4;
@@ -26,34 +27,38 @@ let cameraRight: FirstPersonCamera;
 let cameraLeft: FirstPersonCamera;
 let rightPlayerAlive: boolean = true;
 let leftPlayerAlive: boolean = true;
+let crosshairLeft: HTMLDivElement | null = null;
+let crosshairRight: HTMLDivElement | null = null;
+
 let heightmap: Field2;
 let hMap: Trimesh;
 let lightPosition: Vector3;
-// speed variables
-let moveSpeed = 100;                             
-let turnSpeedDeg = 240;  
-let npcSpeed = 20;
-// These will be -1, 0, or 1.
+// These will be -1, 0, or 1. Keyboard input only to be removed
 let horizontalRight = 0;
 let verticalRight = 0;
 let turnRight = 0;
 let horizontalLeft = 0;
 let verticalLeft = 0;
 let turnLeft = 0;
+// End keyboard variables
+
 let attributes: VertexAttributes;
 let terrainScale: Vector3;
 let grassTexture: WebGLTexture | null = null;
-let crosshairLeft: HTMLDivElement | null = null;
-let crosshairRight: HTMLDivElement | null = null;
-// hit cooldown state
+//cooldown states
 let lastHitRightSec = -Infinity;
 let lastHitLeftSec = -Infinity;
-let hitCooldownSec = 1.0;
-let hitRadius = 3.5;
-// shoot cooldown
 let lastShootRightSec = -Infinity;
 let lastShootLeftSec = -Infinity;
-let shootCooldown = 0.5;
+let lastRoundSec = -Infinity;
+//constants
+const hitCooldownSec = 0.6;
+const hitRadius = 3.5;
+const moveSpeed = 100;                             
+const turnSpeedDeg = 240;  
+const npcSpeed = 20;
+const shootCooldown = 0.2;
+const roundCooldown = 45;
 
 
 async function initialize() {
@@ -73,8 +78,8 @@ async function initialize() {
   grassTexture = createRgbaTexture2d(texImage.width, texImage.height, texImage);
 
   //Initialize both player cameras
-  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 3, scale);
-  cameraLeft = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(5, 10, 5), heightmap, 3, scale);
+  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(50, 10, 50), heightmap, 3, scale);
+  cameraLeft = new FirstPersonCamera(new Vector3(5,10, 5), new Vector3(50, 10, 50), heightmap, 3, scale);
   
   worldFromModelRight = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
   worldFromModelLeft = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
@@ -92,7 +97,7 @@ async function initialize() {
 
   lightPosition = new Vector3(0.0, 0.0, 0.0);
   vao = new VertexArray(shaderProgram, attributes);
-  await models();
+  await create_players();
   
   // Event listeners
   window.addEventListener('resize', () => resizeCanvas());
@@ -256,22 +261,18 @@ function renderLeft() {
   shaderProgram.unbind();
 }
 
-async function models() {
+async function create_players() {
   // Read the glTF and wrap the first mesh in a SceneModel which builds its own VAO
   const model = await gltf.Model.readFromUrl('models/Snowman.gltf');
   const gun = await gltf.Model.readFromUrl('models/Gun.gltf')
-  const count = 5;
   //Creates count random models
   modelInstances = [];
-  for (let i = 0; i < count; ++i) {
-    const inst = new SceneModel(model, shaderProgram, true, 20, heightmap, terrainScale);
-    modelInstances.push(inst);
-  }
   
   //Create player characters
-  if (cameraRight && cameraLeft) {
+  if (cameraRight && cameraLeft && !cameraLeftModel && !cameraRightModel) {
     cameraRightModel = new SceneModel(model, shaderProgram, false, 20, heightmap, terrainScale);
     cameraRightGun = new SceneModel(gun, shaderProgram, false, 20, heightmap, terrainScale);
+    cameraRightModel.animation('head');
     cameraRightModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraRight.from.x, cameraRight.from.y, cameraRight.from.z));
     cameraRightGun.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraRight.from.x + 1, cameraRight.from.y, cameraRight.from.z + 1)).multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25)).multiplyMatrix(Matrix4.rotateY(90));
     modelInstances.push(cameraRightModel);
@@ -279,12 +280,25 @@ async function models() {
 
     cameraLeftModel = new SceneModel(model, shaderProgram, false, 20, heightmap, terrainScale);
     cameraLeftGun = new SceneModel(gun, shaderProgram, false, 20, heightmap, terrainScale);
+    cameraLeftModel.animation('head');
     cameraLeftModel.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraLeft.from.x, cameraLeft.from.y, cameraLeft.from.z));
     cameraLeftGun.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(cameraLeft.from.x + 1, cameraLeft.from.y, cameraLeft.from.z + 1)).multiplyMatrix(Matrix4.scale(0.25, 0.25, 0.25)).multiplyMatrix(Matrix4.rotateY(90));
     modelInstances.push(cameraLeftModel);
     modelInstances.push(cameraLeftGun);
   }
 
+}
+
+async function add_models(count: number) {
+  // Read the glTF and wrap the first mesh in a SceneModel which builds its own VAO
+  const model = await gltf.Model.readFromUrl('models/Snowman.gltf');
+  const gun = await gltf.Model.readFromUrl('models/Gun.gltf')
+  //Creates count random models
+  for (let i = 0; i < count; ++i) {
+    const inst = new SceneModel(model, shaderProgram, true, 20, heightmap, terrainScale);
+    inst.animation('head');
+    modelInstances.push(inst);
+  }
 }
 
 function resizeCanvas() {
@@ -297,11 +311,11 @@ function resizeCanvas() {
   renderLeft();
 }
 
-let then: DOMHighResTimeStamp | null = null;
 
 function animate(now: DOMHighResTimeStamp) {
   const elapsed = then ? now - then : 0;
   const deltaSeconds = elapsed / 1000; 
+  const nowSec = (now as number) / 1000;
 
   // Advance animation time for all models (milliseconds elapsed)
   for (const inst of modelInstances) {
@@ -382,7 +396,6 @@ function animate(now: DOMHighResTimeStamp) {
       .multiplyMatrix(Matrix4.rotateY(yawDeg - 90));
     // Check if enemy close enough to hit and if out of cooldown range
     if (dist < hitRadius) {
-      const nowSec = (now as number) / 1000;
       if (target === cameraLeft) {
         if (nowSec - lastHitLeftSec >= hitCooldownSec) {
           cameraLeftModel?.takeDamage?.(1);
@@ -399,11 +412,26 @@ function animate(now: DOMHighResTimeStamp) {
     }
     inst.animation('head');
   }
+  // Spawn a new wave every after cooldown
+    if (nowSec - lastRoundSec >= roundCooldown) {
+      add_models(10);
+      lastRoundSec = nowSec;
+    }
   modelInstances = modelInstances.filter(inst => {
     if (inst.health <= 0) {
       inst.destroy();
-      if (inst === cameraLeftModel) cameraLeftModel = null;
-      if (inst === cameraRightModel) cameraRightModel = null;
+      if (inst === cameraLeftModel) {
+        cameraLeftModel = null;
+        leftPlayerAlive = false;
+        cameraLeftGun?.destroy();
+        cameraLeftGun = null;
+      }
+      if (inst === cameraRightModel) {
+        cameraRightModel = null;
+        rightPlayerAlive = false;
+        cameraRightGun?.destroy();
+        cameraRightGun = null;
+      }
       return false; // remove from array
     }
     return true;
@@ -418,7 +446,7 @@ function animateGamepad(now: DOMHighResTimeStamp, deltaSeconds: number, turnSpee
   const gamepads = navigator.getGamepads();
   const gamepadLeft = gamepads[0];
   const gamepadRight = gamepads[1];
-  if (gamepadLeft) {
+  if (gamepadLeft && leftPlayerAlive) {
         //first 4 control moving around
         if(gamepadLeft.axes[0] > 0.1 ) {
           cameraLeft.strafe(gamepadLeft.axes[0] * deltaSeconds * moveSpeed);
@@ -469,7 +497,7 @@ function animateGamepad(now: DOMHighResTimeStamp, deltaSeconds: number, turnSpee
         }
         //add button features
   }
-  if ( gamepadRight) {
+  if ( gamepadRight && rightPlayerAlive) {
         //first 4 control moving around
         if( gamepadRight.axes[0] > 0.1 ) {
           cameraRight.strafe( gamepadRight.axes[0] * deltaSeconds * moveSpeed);
@@ -522,48 +550,6 @@ function animateGamepad(now: DOMHighResTimeStamp, deltaSeconds: number, turnSpee
   }
   resizeCanvas();
 }
-
-
-
-//ADD function for two controllers from stick-shift lab
-function onKeyDown(event: KeyboardEvent) {
-  const key = event.key;
-  if (key === 'ArrowUp') {
-    verticalRight = 1;
-  } else if (key === 'ArrowDown') {
-    verticalRight = -1;
-  } else if (key === 'ArrowLeft') {
-    horizontalRight = -1;
-  } else if (key === 'ArrowRight') {
-    horizontalRight = 1;
-  }  else if(key == 'w') {
-    verticalLeft = 1;
-  } else if (key === 's') {
-    verticalLeft = -1;
-  } else if (key === 'a') {
-    horizontalLeft = -1;
-  } else if (key === 'd') {
-    horizontalLeft = 1;
-  }
-  renderRight();
-  renderLeft();
-}
-
-function onKeyUp(event: KeyboardEvent) {
-  const key = event.key;
-  if (key === 'ArrowUp' || key == 'ArrowDown') {
-    verticalRight = 0;
-  } else if ( key === 'ArrowLeft' || key == 'ArrowRight') {
-    horizontalRight = 0;
-  } else if (key === 'q' || key === 'e') {
-    turnRight = 0;
-  } else if (key === 'w' || key === 's' ) {
-    verticalLeft = 0;
-  } else if (key === 'a' || key === 'd' ) {
-    horizontalLeft = 0;
-  } 
-}
-
 
 
 function createRgbaTexture2d(width: number, height: number, image: HTMLImageElement | Uint8ClampedArray, textureUnit: GLenum = gl.TEXTURE0) {
@@ -635,34 +621,34 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
   const nowSec = (now as number) / 1000;
 
   if (camera === cameraLeft) {
-        if (nowSec - lastShootLeftSec >= shootCooldown) {
-          for (const inst of modelInstances) {
-            // Skip the right player's own model to avoid self-intersection
-            if (inst === cameraLeftModel || inst === cameraRightModel) continue;
-            const bounds = inst.getWorldBounds();
-            const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
-            if (points.length > 0) {
-              inst.takeDamage(1);
-              console.log(inst.health)
-            }
-          }
-          lastShootLeftSec = nowSec;
-        }
-      } 
-      else if (camera === cameraRight) {
-        if (nowSec - lastShootRightSec >= shootCooldown) {
-          for (const inst of modelInstances) {
-            // Skip the right player's own model to avoid self-intersection
-            if (inst === cameraLeftModel || inst === cameraRightModel) continue;
-            const bounds = inst.getWorldBounds();
-            const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
-            if (points.length > 0) {
-              inst.takeDamage(1);
-            }
-          }
-          lastShootRightSec = nowSec;
+    if (nowSec - lastShootLeftSec >= shootCooldown) {
+      for (const inst of modelInstances) {
+        // Skip the player models and guns
+        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
+        const bounds = inst.getWorldBounds();
+        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
+        if (points.length > 0) {
+          inst.takeDamage(1);
+          console.log(inst.health)
         }
       }
+      lastShootLeftSec = nowSec;
+    }
+  } 
+  else if (camera === cameraRight) {
+    if (nowSec - lastShootRightSec >= shootCooldown) {
+      for (const inst of modelInstances) {
+        // Skip the player models and guns
+        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
+        const bounds = inst.getWorldBounds();
+        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
+        if (points.length > 0) {
+          inst.takeDamage(1);
+        }
+      }
+      lastShootRightSec = nowSec;
+    }
+  }
 }
 
 function onMouseUp(_event: MouseEvent) {
@@ -681,6 +667,44 @@ function onMouseUp(_event: MouseEvent) {
   }
 }
 
+//ADD function for two controllers from stick-shift lab
+function onKeyDown(event: KeyboardEvent) {
+  const key = event.key;
+  if (key === 'ArrowUp') {
+    verticalRight = 1;
+  } else if (key === 'ArrowDown') {
+    verticalRight = -1;
+  } else if (key === 'ArrowLeft') {
+    horizontalRight = -1;
+  } else if (key === 'ArrowRight') {
+    horizontalRight = 1;
+  }  else if(key == 'w') {
+    verticalLeft = 1;
+  } else if (key === 's') {
+    verticalLeft = -1;
+  } else if (key === 'a') {
+    horizontalLeft = -1;
+  } else if (key === 'd') {
+    horizontalLeft = 1;
+  }
+  renderRight();
+  renderLeft();
+}
+
+function onKeyUp(event: KeyboardEvent) {
+  const key = event.key;
+  if (key === 'ArrowUp' || key == 'ArrowDown') {
+    verticalRight = 0;
+  } else if ( key === 'ArrowLeft' || key == 'ArrowRight') {
+    horizontalRight = 0;
+  } else if (key === 'q' || key === 'e') {
+    turnRight = 0;
+  } else if (key === 'w' || key === 's' ) {
+    verticalLeft = 0;
+  } else if (key === 'a' || key === 'd' ) {
+    horizontalLeft = 0;
+  } 
+}
 
 
 window.addEventListener('load', () => initialize());
