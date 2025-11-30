@@ -20,6 +20,9 @@ let billboardProgram: ShaderProgram;
 let skyboxVao: VertexArray;
 let vao: VertexArray;
 let plantVao: VertexArray;
+let particleVao: VertexArray | null = null;
+let terrainDepthVao: VertexArray | null = null;
+
 let modelInstances: SceneModel[] = []; //List of all models in scene 
 let clipFromEye: Matrix4;
 // Shadows matrices
@@ -27,9 +30,7 @@ let lightCamera: FirstPersonCamera;
 let lightFromWorld: Matrix4;
 let clipFromLight: Matrix4;
 let textureFromWorld: Matrix4;
-let depthTexture: WebGLTexture | null = null;
 let depthFramebuffer: WebGLFramebuffer | null = null;
-let terrainDepthVao: VertexArray | null = null;
 let depthWidth = 1024;
 let depthHeight = 1024;
 
@@ -64,6 +65,8 @@ let terrainScale: Vector3;
 let grassTexture: WebGLTexture | null = null;
 let skyboxTexture: WebGLTexture | null = null;
 let plantTexture: WebGLTexture | null = null;
+let depthTexture: WebGLTexture | null = null;
+let particleTexture: WebGLTexture | null = null;
 //cooldown states
 let lastHitRightSec = -Infinity;
 let lastHitLeftSec = -Infinity;
@@ -78,11 +81,23 @@ const turnSpeedDeg = 240;
 const npcSpeed = 20;
 const shootCooldown = 0.2;
 const roundCooldown = 45;
+const particlesPerShot = 20;
 // Texture units
 const grassTextureUnit = 1;
 const skyboxTextureUnit = 2;
 const depthTextureUnit = 3;
 const plantTextureUnit = 4;
+const particleTextureUnit = 5;
+// Particle system
+type Particle = {
+  position: Vector3;
+  velocity: Vector3;
+  scale: number;
+  life: number;
+  owner: FirstPersonCamera; //left or right
+  color?: Vector4;
+}
+let particles: Particle[] = [];
 
 
 async function initialize() {
@@ -113,25 +128,48 @@ async function initialize() {
   skyboxAttributes.addIndices(skybox.faceBuffer());
   skyboxVao= new VertexArray(skyboxProgram, skyboxAttributes);
 
-  // Billboarding
 
+
+  // Billboarding
   const billboardVertexSource = await fetchText('billboard-vertex.glsl');
   const billboardFragmentSource = `
  precision mediump float;
  in vec2 mixTexPosition;
- uniform sampler2D plantTexture;
+ uniform sampler2D billboardTexture;
  out vec4 fragmentColor;
  void main() {
-   vec4 c = texture(plantTexture, mixTexPosition);
+   vec4 c = texture(billboardTexture, mixTexPosition);
    if (c.a < 0.05) discard;
    fragmentColor = c;
  }
   `;
-    
   billboardProgram = new ShaderProgram(billboardVertexSource, billboardFragmentSource);
   const plantImg = await fetchImage('textures/plant.png');
   plantTexture = createRgbaTexture2d(plantImg.width, plantImg.height, plantImg, gl.TEXTURE4);
   plantVao = plants(250, heightmap.width * terrainScale.x, heightmap.height * terrainScale.z);
+
+
+  // Particles
+  const particleImg = await fetchImage('textures/bullet.png');
+  particleTexture = createRgbaTexture2d(particleImg.width, particleImg.height, particleImg, gl.TEXTURE5);
+  const particlePos = new Float32Array([
+      -0.5, -0.5, 0,
+       0.5, -0.5, 0,
+      -0.5,  0.5, 0,
+       0.5,  0.5, 0,
+    ]);
+    const particleTexPos = new Float32Array([
+      0, 1,
+      1, 1,
+      0, 0,
+      1, 0,
+    ]);
+    const particleAttributes = new VertexAttributes();
+    particleAttributes.addAttribute('position', 4, 3, particlePos);
+    particleAttributes.addAttribute('texPosition', 4, 2, particleTexPos);
+    particleAttributes.addIndices(new Uint32Array([0, 1, 3, 0, 3, 2]));
+    // reuse billboardProgram so particles behave like billboards
+    particleVao = new VertexArray(billboardProgram, particleAttributes);
 
 
   //Initialize both player cameras
@@ -152,7 +190,8 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  // Shadows
+
+    // Shadows
   depthWidth = 1024;
   depthHeight = 1024;
   lightPosition = new Vector3(200.0, 400.0, 200.0);
@@ -172,7 +211,6 @@ async function initialize() {
   depthFramebuffer = initializeDepthFbo(depthTexture);
   terrainDepthVao = new VertexArray(depthProgram, attributes);
   renderDepths(depthWidth, depthHeight, depthFramebuffer);
-
 
   vao = new VertexArray(shaderProgram, attributes);
   await create_players();
@@ -304,7 +342,7 @@ function renderRight() {
   shaderProgram.unbind();
   
   // draw billboards
-  if (plantVao && billboardProgram) {
+  if (plantVao && particleVao && billboardProgram) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
@@ -321,15 +359,33 @@ function renderRight() {
     billboardProgram.setUniform3f('cameraRight', right.x, right.y, right.z);
     billboardProgram.setUniform3f('cameraUp', up.x, up.y, up.z);
 
-    if (plantTexture) {
-      gl.activeTexture(gl.TEXTURE4);
-      gl.bindTexture(gl.TEXTURE_2D, plantTexture);
-      billboardProgram.setUniform1i('plantTexture', plantTextureUnit);
+    if (particleTexture) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, particleTexture);
+      billboardProgram.setUniform1i('billboardTexture', plantTextureUnit);
     }
-
+    //draw plants
     plantVao.bind();
     plantVao.drawIndexed(gl.TRIANGLES);
     plantVao.unbind();
+
+    // draw particles
+    for (const p of particles) {
+      if (p.owner !== cameraRight) continue;
+      const worldFromModel = Matrix4.identity()
+        .multiplyMatrix(Matrix4.translate(p.position.x, p.position.y, p.position.z))
+        .multiplyMatrix(Matrix4.scale(0.05, 0.01, 0.05));
+      billboardProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+       if (plantTexture) {
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, plantTexture);
+        billboardProgram.setUniform1i('billboardTexture', particleTextureUnit);
+      }
+      particleVao.bind();
+      particleVao.drawIndexed(gl.TRIANGLES);
+      particleVao.unbind();
+    }
+
     billboardProgram.unbind();
 
     gl.depthMask(true);
@@ -436,7 +492,7 @@ function renderLeft() {
   shaderProgram.unbind();
 
   // draw billboards
-  if (plantVao && billboardProgram) {
+  if (plantVao && particleVao && billboardProgram) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
@@ -456,12 +512,34 @@ function renderLeft() {
     if (plantTexture) {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, plantTexture);
-      billboardProgram.setUniform1i('plantTexture', plantTextureUnit);
+      billboardProgram.setUniform1i('billboardTexture', plantTextureUnit);
     }
 
     plantVao.bind();
     plantVao.drawIndexed(gl.TRIANGLES);
     plantVao.unbind();
+
+    // draw particles
+    for (const p of particles) {
+      if (p.owner !== cameraLeft) continue;
+      const worldFromModel = Matrix4.identity()
+        .multiplyMatrix(Matrix4.translate(p.position.x-0.2, p.position.y, p.position.z))
+        .multiplyMatrix(Matrix4.scale(0.05, 0.01, 0.05));
+      billboardProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+       if (plantTexture) {
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, plantTexture);
+        billboardProgram.setUniform1i('billboardTexture', particleTextureUnit);
+      }
+      particleVao.bind();
+      particleVao.drawIndexed(gl.TRIANGLES);
+      particleVao.unbind();
+    }
+
+    billboardProgram.unbind();
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
     billboardProgram.unbind();
 
     gl.depthMask(true);
@@ -530,6 +608,18 @@ function animate(now: DOMHighResTimeStamp) {
     if (inst.model && typeof inst.model.tick === 'function') {
       inst.model.tick(elapsed);
     }
+  }
+
+  //Update particles
+  for (let i = particles.length - 1; i >= 0; --i) {
+    const p = particles[i];
+    p.life -= deltaSeconds;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    p.position = p.position.add(p.velocity.scalarMultiply(deltaSeconds));
+    p.velocity = p.velocity.scalarMultiply(0.9);
   }
 
   //Keyboard controls To be removed
@@ -768,6 +858,7 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
 
   if (camera === cameraLeft) {
     if (nowSec - lastShootLeftSec >= shootCooldown) {
+      spawnMuzzleFlash(cameraLeft);
       for (const inst of modelInstances) {
         // Skip the player models and guns
         if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
@@ -783,6 +874,7 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
   } 
   else if (camera === cameraRight) {
     if (nowSec - lastShootRightSec >= shootCooldown) {
+      spawnMuzzleFlash(cameraRight);
       for (const inst of modelInstances) {
         // Skip the player models and guns
         if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
@@ -794,6 +886,25 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
       }
       lastShootRightSec = nowSec;
     }
+  }
+}
+
+//particle systems
+function spawnMuzzleFlash(camera: FirstPersonCamera, count = particlesPerShot) {
+  const basePos = camera.from.clone().add(new Vector3(camera.forward.x, 0, camera.forward.z).normalize().scalarMultiply(1.0));
+  for (let i = 0; i < count; ++i) {
+    const spread = 0.1;
+    const rand = new Vector3((Math.random()-0.5)*spread, (Math.random()-0.5)*spread, (Math.random()-0.5)*spread);
+    const dir = camera.forward.normalize().add(rand).normalize();
+    const speed = 100 + Math.random() * 150;
+    particles.push({
+      position: basePos.clone(),
+      velocity: dir.scalarMultiply(speed),
+      scale: Math.random(),
+      life: 0.08 + Math.random() * 0.12,
+      owner: camera,
+      color: new Vector4(1, 0.9, 0.6, 1),
+    });
   }
 }
 
@@ -996,6 +1107,7 @@ function plants(n: number, terrainWidth: number, terrainDepth: number) {
 
   return new VertexArray(billboardProgram, attr);
 }
+
 
 // Keyboard functions
 function onMouseUp(_event: MouseEvent) {
