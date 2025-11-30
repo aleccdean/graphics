@@ -138,6 +138,23 @@ export class Matrix4 {
     return new Vector3(x, y, z);
   }
 
+   multiplyVector(vec: Vector3) {
+    // transform a direction vector (no translation)
+    const x =
+        this.get(0, 0) * vec.x +
+        this.get(0, 1) * vec.y +
+        this.get(0, 2) * vec.z;
+      const y =
+        this.get(1, 0) * vec.x +
+        this.get(1, 1) * vec.y +
+        this.get(1, 2) * vec.z;
+      const z =
+        this.get(2, 0) * vec.x +
+        this.get(2, 1) * vec.y +
+        this.get(2, 2) * vec.z;
+      return new Vector3(x, y, z);
+  }
+
 
   multiplyVector4(v: Vector4) {
     return new Vector4(

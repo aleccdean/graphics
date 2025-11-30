@@ -13,9 +13,26 @@ import { SceneModel } from 'lib/model.js';
 let then: DOMHighResTimeStamp | null = null;
 let canvas: HTMLCanvasElement;
 let shaderProgram: ShaderProgram;
-let clipFromEye: Matrix4;
+let skyboxProgram: ShaderProgram;
+let depthProgram: ShaderProgram; // For shadows
+let billboardProgram: ShaderProgram;
+
+let skyboxVao: VertexArray;
 let vao: VertexArray;
+let plantVao: VertexArray;
 let modelInstances: SceneModel[] = []; //List of all models in scene 
+let clipFromEye: Matrix4;
+// Shadows matrices
+let lightCamera: FirstPersonCamera;
+let lightFromWorld: Matrix4;
+let clipFromLight: Matrix4;
+let textureFromWorld: Matrix4;
+let depthTexture: WebGLTexture | null = null;
+let depthFramebuffer: WebGLFramebuffer | null = null;
+let terrainDepthVao: VertexArray | null = null;
+let depthWidth = 1024;
+let depthHeight = 1024;
+
 // Create variables for left and right players
 let cameraRightModel: SceneModel | null = null;
 let cameraLeftModel: SceneModel | null = null;
@@ -45,6 +62,8 @@ let turnLeft = 0;
 let attributes: VertexAttributes;
 let terrainScale: Vector3;
 let grassTexture: WebGLTexture | null = null;
+let skyboxTexture: WebGLTexture | null = null;
+let plantTexture: WebGLTexture | null = null;
 //cooldown states
 let lastHitRightSec = -Infinity;
 let lastHitLeftSec = -Infinity;
@@ -59,6 +78,11 @@ const turnSpeedDeg = 240;
 const npcSpeed = 20;
 const shootCooldown = 0.2;
 const roundCooldown = 45;
+// Texture units
+const grassTextureUnit = 1;
+const skyboxTextureUnit = 2;
+const depthTextureUnit = 3;
+const plantTextureUnit = 4;
 
 
 async function initialize() {
@@ -69,17 +93,50 @@ async function initialize() {
 
   //Read heightmap
   const image = await fetchImage('heightmap.png');
-  const scale = new Vector3(2, 150, 2);
-  terrainScale = scale;
+  terrainScale = new Vector3(2, 150, 2);
   heightmap = Field2.readFromImage(image);
-  hMap = heightmap.toTrimesh(scale);
+  hMap = heightmap.toTrimesh(terrainScale);
   //read texture for heightmap
   const texImage = await fetchImage('textures/grass2.jpg')
-  grassTexture = createRgbaTexture2d(texImage.width, texImage.height, texImage);
+  grassTexture = createRgbaTexture2d(texImage.width, texImage.height, texImage,gl.TEXTURE1);
+
+  //Skybox 
+  const skyboxVertexSource = await fetchText('skybox-vertex.glsl');
+  const skyboxFragmentSource = await fetchText('skybox-fragment.glsl');
+  skyboxProgram = new ShaderProgram(skyboxVertexSource, skyboxFragmentSource);
+  skyboxTexture = await loadCubemap('cubemap','jpg',gl.TEXTURE2)
+  const skybox = Prefab.skybox(); 
+  const skyboxAttributes = new VertexAttributes();
+  skybox.computeNormals();
+  skyboxAttributes.addAttribute('position', skybox.vertexCount, 3, skybox.positionBuffer());
+  skyboxAttributes.addAttribute('normal', skybox.vertexCount, 3, skybox.normalBuffer());
+  skyboxAttributes.addIndices(skybox.faceBuffer());
+  skyboxVao= new VertexArray(skyboxProgram, skyboxAttributes);
+
+  // Billboarding
+
+  const billboardVertexSource = await fetchText('billboard-vertex.glsl');
+  const billboardFragmentSource = `
+ precision mediump float;
+ in vec2 mixTexPosition;
+ uniform sampler2D plantTexture;
+ out vec4 fragmentColor;
+ void main() {
+   vec4 c = texture(plantTexture, mixTexPosition);
+   if (c.a < 0.05) discard;
+   fragmentColor = c;
+ }
+  `;
+    
+  billboardProgram = new ShaderProgram(billboardVertexSource, billboardFragmentSource);
+  const plantImg = await fetchImage('textures/plant.png');
+  plantTexture = createRgbaTexture2d(plantImg.width, plantImg.height, plantImg, gl.TEXTURE4);
+  plantVao = plants(250, heightmap.width * terrainScale.x, heightmap.height * terrainScale.z);
+
 
   //Initialize both player cameras
-  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(50, 10, 50), heightmap, 3, scale);
-  cameraLeft = new FirstPersonCamera(new Vector3(5,10, 5), new Vector3(50, 10, 50), heightmap, 3, scale);
+  cameraRight = new FirstPersonCamera(new Vector3(0,10, 0), new Vector3(50, 10, 50), heightmap, 3, terrainScale);
+  cameraLeft = new FirstPersonCamera(new Vector3(5,10, 5), new Vector3(50, 10, 50), heightmap, 3, terrainScale);
   
   worldFromModelRight = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
   worldFromModelLeft = Matrix4.identity().multiplyMatrix(Matrix4.translate(0,0,0));
@@ -95,7 +152,28 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  lightPosition = new Vector3(0.0, 0.0, 0.0);
+  // Shadows
+  depthWidth = 1024;
+  depthHeight = 1024;
+  lightPosition = new Vector3(200.0, 400.0, 200.0);
+  const lightTarget = new Vector3(200.0, 0.0, 200.0);
+  const lightForward = lightTarget.subtract(lightPosition).normalize();
+  lightFromWorld = Matrix4.look(lightPosition, lightForward, new Vector3(0, 1, 0));
+  clipFromLight = Matrix4.perspective(45, 1, 0.1, 1000);
+  const matrices = [
+    Matrix4.translate(0.5, 0.5, 0.5),
+    Matrix4.scale(0.5, 0.5, 0.5),
+    clipFromLight,
+    lightFromWorld,
+  ];
+  textureFromWorld = matrices.reduce((accum, transform) => accum.multiplyMatrix(transform));
+  initializeDepthProgram();
+  depthTexture = reserveDepthTexture(depthWidth, depthHeight, gl.TEXTURE3);
+  depthFramebuffer = initializeDepthFbo(depthTexture);
+  terrainDepthVao = new VertexArray(depthProgram, attributes);
+  renderDepths(depthWidth, depthHeight, depthFramebuffer);
+
+
   vao = new VertexArray(shaderProgram, attributes);
   await create_players();
   
@@ -135,25 +213,58 @@ function renderRight() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
-  const lightPositionEye = cameraRight.eyeFromWorld.multiplyPosition(lightPosition);
+
+
+  //Draw skybox
+  if(skyboxTexture) {
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+    gl.depthMask(false);
+    skyboxProgram.bind();
+    // ensure the skybox sampler uses texture unit 2
+    skyboxProgram.setUniform1i('skybox', skyboxTextureUnit);
+    const worldFromModel = Matrix4.translate(cameraRight.from.x, cameraRight.from.y, cameraRight.from.z);
+    skyboxProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+    skyboxProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
+    skyboxProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements);
+    skyboxVao.bind();
+    skyboxVao.drawIndexed(gl.TRIANGLES);
+    skyboxVao.unbind();
+    skyboxProgram.unbind();
+    gl.depthMask(true);
+  }
   shaderProgram.bind();
-  //shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
-  //shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform1f("ambientFactor", 0.1);
-  // Terrain uses grassTexture (unit 0) and no model texture / vertex color
-  shaderProgram.setUniform1i("grassTexture", 0);
-  shaderProgram.setUniform1i("modelTexture", 1);
+  
+  //lighting
+
+  const lightPositionEye = cameraRight.eyeFromWorld.multiplyPosition(lightPosition);
+  shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
+  shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
+  shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
+  //shaderProgram.setUniform3f("specularColor", 0.0, 0.0, 0.0);
+  //shaderProgram.setUniform1f("shininess", 0.0);
+  shaderProgram.setUniform1f("ambientFactor", 0.1);
+
+  // Terrain uses grassTexture (unit 1) and no model texture / vertex color
+  shaderProgram.setUniform1i("grassTexture", grassTextureUnit);
+  shaderProgram.setUniform1i("modelTexture", 0);
   shaderProgram.setUniform1i("useModelTexture", 0);
   shaderProgram.setUniform1i("useVertexColor", 0);
   if (grassTexture) {
-    gl.activeTexture(gl.TEXTURE0);
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, grassTexture);
+  }
+  if (depthTexture) {
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
   }
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
   shaderProgram.setUniform1i('animation', 0);
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements)
+  shaderProgram.setUniformMatrix4fv("textureFromWorld", textureFromWorld.elements);
+  shaderProgram.setUniform1i("depthTexture", depthTextureUnit);
+
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
   vao.unbind();
@@ -192,6 +303,38 @@ function renderRight() {
   }
   shaderProgram.unbind();
   
+  // draw billboards
+  if (plantVao && billboardProgram) {
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+
+    billboardProgram.bind();
+    billboardProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
+    billboardProgram.setUniformMatrix4fv('eyeFromWorld', cameraRight.eyeFromWorld.elements);
+    billboardProgram.setUniformMatrix4fv('worldFromModel', Matrix4.identity().elements);
+
+    // compute right/up in world space from camera.forward
+    const f = cameraRight.forward.normalize();
+    const right = f.cross(new Vector3(0, 1, 0)).normalize();
+    const up = right.cross(f).normalize();
+    billboardProgram.setUniform3f('cameraRight', right.x, right.y, right.z);
+    billboardProgram.setUniform3f('cameraUp', up.x, up.y, up.z);
+
+    if (plantTexture) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, plantTexture);
+      billboardProgram.setUniform1i('plantTexture', plantTextureUnit);
+    }
+
+    plantVao.bind();
+    plantVao.drawIndexed(gl.TRIANGLES);
+    plantVao.unbind();
+    billboardProgram.unbind();
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
 }
 
 function renderLeft() {
@@ -204,24 +347,54 @@ function renderLeft() {
   gl.enable(gl.DEPTH_TEST);
 
   const lightPositionEye = cameraLeft.eyeFromWorld.multiplyPosition(lightPosition);
+  //Draw skybox
+  if(skyboxTexture) {
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+    gl.depthMask(false);
+    skyboxProgram.bind();
+    // ensure the skybox sampler uses texture unit 2
+    skyboxProgram.setUniform1i('skybox', skyboxTextureUnit);
+    const worldFromModel = Matrix4.translate(cameraLeft.from.x, cameraLeft.from.y, cameraLeft.from.z);
+    skyboxProgram.setUniformMatrix4fv('worldFromModel', worldFromModel.elements);
+    skyboxProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
+    skyboxProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements);
+    skyboxVao.bind();
+    skyboxVao.drawIndexed(gl.TRIANGLES);
+    skyboxVao.unbind();
+    skyboxProgram.unbind();
+    gl.depthMask(true);
+  }
   shaderProgram.bind();
-  //shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
-  //shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
-  //shaderProgram.setUniform1f("ambientFactor", 0.1);
-  // Default to terrain texture on unit 0; model texture (if present) will be bound to unit 1
-  shaderProgram.setUniform1i("grassTexture", 0);
-  shaderProgram.setUniform1i("modelTexture", 1);
+
+  // Lighting
+  shaderProgram.setUniform3f("lightPositionEye", lightPositionEye.x, lightPositionEye.y, lightPositionEye.z);
+  shaderProgram.setUniform3f("albedo", 1.0, 1.0, 1.0);
+  shaderProgram.setUniform3f("diffuseColor", 1.0, 1.0, 1.0);
+  //shaderProgram.setUniform3f("specularColor", 0.0, 0.0, 0.0);
+  //shaderProgram.setUniform1f("shininess", 1.0);
+  shaderProgram.setUniform1f("ambientFactor", 0.1);
+
+  //Does not use modelTexture or vertex color
+  shaderProgram.setUniform1i("grassTexture", grassTextureUnit);
+  shaderProgram.setUniform1i("modelTexture", 0);
   shaderProgram.setUniform1i("useModelTexture", 0);
   shaderProgram.setUniform1i("useVertexColor", 0);
   if (grassTexture) {
-    gl.activeTexture(gl.TEXTURE0);
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, grassTexture);
+  }
+  if (depthTexture) {
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
   }
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelLeft.elements)
   shaderProgram.setUniform1i('animation', 0);
-  shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements)
+  shaderProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements);
+  shaderProgram.setUniformMatrix4fv("textureFromWorld", textureFromWorld.elements);
+  shaderProgram.setUniform1i("depthTexture", depthTextureUnit);
+  
   vao.bind();
   vao.drawIndexed(gl.TRIANGLES);
   vao.unbind();
@@ -240,6 +413,7 @@ function renderLeft() {
           shaderProgram.setUniformMatrix4fv(`jointTransforms[${i}]`, mat.elements);
         }
       }
+      
       if (inst.modelTexture) {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, inst.modelTexture);
@@ -253,12 +427,46 @@ function renderLeft() {
         shaderProgram.setUniform1i('useModelTexture', 0);
         shaderProgram.setUniform1i('useVertexColor', 0);
       }
+      
       inst.vao.bind();
       inst.vao.drawIndexed(gl.TRIANGLES);
       inst.vao.unbind();
     }
   }
   shaderProgram.unbind();
+
+  // draw billboards
+  if (plantVao && billboardProgram) {
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+
+    billboardProgram.bind();
+    billboardProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
+    billboardProgram.setUniformMatrix4fv('eyeFromWorld', cameraLeft.eyeFromWorld.elements);
+    billboardProgram.setUniformMatrix4fv('worldFromModel', Matrix4.identity().elements);
+
+    // compute right/up in world space from camera.forward
+    const f = cameraLeft.forward.normalize();
+    const right = f.cross(new Vector3(0, 1, 0)).normalize();
+    const up = right.cross(f).normalize();
+    billboardProgram.setUniform3f('cameraRight', right.x, right.y, right.z);
+    billboardProgram.setUniform3f('cameraUp', up.x, up.y, up.z);
+
+    if (plantTexture) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, plantTexture);
+      billboardProgram.setUniform1i('plantTexture', plantTextureUnit);
+    }
+
+    plantVao.bind();
+    plantVao.drawIndexed(gl.TRIANGLES);
+    plantVao.unbind();
+    billboardProgram.unbind();
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
 }
 
 async function create_players() {
@@ -436,6 +644,7 @@ function animate(now: DOMHighResTimeStamp) {
     }
     return true;
   });
+  renderDepths(depthWidth, depthHeight, depthFramebuffer);
   resizeCanvas();
   requestAnimationFrame(animate);
   then = now;
@@ -552,6 +761,43 @@ function animateGamepad(now: DOMHighResTimeStamp, deltaSeconds: number, turnSpee
 }
 
 
+function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
+  const rayStart: Vector3 = camera.from.clone();
+  const dir: Vector3 = camera.forward.normalize();
+  const nowSec = (now as number) / 1000;
+
+  if (camera === cameraLeft) {
+    if (nowSec - lastShootLeftSec >= shootCooldown) {
+      for (const inst of modelInstances) {
+        // Skip the player models and guns
+        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
+        const bounds = inst.getWorldBounds();
+        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
+        if (points.length > 0) {
+          inst.takeDamage(1);
+          console.log(inst.health)
+        }
+      }
+      lastShootLeftSec = nowSec;
+    }
+  } 
+  else if (camera === cameraRight) {
+    if (nowSec - lastShootRightSec >= shootCooldown) {
+      for (const inst of modelInstances) {
+        // Skip the player models and guns
+        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
+        const bounds = inst.getWorldBounds();
+        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
+        if (points.length > 0) {
+          inst.takeDamage(1);
+        }
+      }
+      lastShootRightSec = nowSec;
+    }
+  }
+}
+
+
 function createRgbaTexture2d(width: number, height: number, image: HTMLImageElement | Uint8ClampedArray, textureUnit: GLenum = gl.TEXTURE0) {
   gl.activeTexture(textureUnit);
   const texture = gl.createTexture();
@@ -562,6 +808,7 @@ function createRgbaTexture2d(width: number, height: number, image: HTMLImageElem
   return texture;
 }
 
+// Raycasting (for shooting)
 function intersectRayBox(rayStart: Vector3, rayDirection: Vector3, boxMin: Vector3, boxMax: Vector3) {
   // Intersect the ray with the left and right planes.
   let t0 = (boxMin.x - rayStart.x) / rayDirection.x;
@@ -615,42 +862,142 @@ function intersectRayBox(rayStart: Vector3, rayDirection: Vector3, boxMin: Vecto
   ];
 }
 
-function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
-  const rayStart: Vector3 = camera.from.clone();
-  const dir: Vector3 = camera.forward.normalize();
-  const nowSec = (now as number) / 1000;
+// Skybox
+async function loadCubemap(directoryUrl: string, extension: string, textureUnit: GLenum = gl.TEXTURE0) {
+  const faces = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
-  if (camera === cameraLeft) {
-    if (nowSec - lastShootLeftSec >= shootCooldown) {
-      for (const inst of modelInstances) {
-        // Skip the player models and guns
-        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
-        const bounds = inst.getWorldBounds();
-        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
-        if (points.length > 0) {
-          inst.takeDamage(1);
-          console.log(inst.health)
-        }
-      }
-      lastShootLeftSec = nowSec;
-    }
-  } 
-  else if (camera === cameraRight) {
-    if (nowSec - lastShootRightSec >= shootCooldown) {
-      for (const inst of modelInstances) {
-        // Skip the player models and guns
-        if (inst === cameraLeftModel || inst === cameraRightModel || inst == cameraLeftGun || inst == cameraRightGun) continue;
-        const bounds = inst.getWorldBounds();
-        const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
-        if (points.length > 0) {
-          inst.takeDamage(1);
-        }
-      }
-      lastShootRightSec = nowSec;
-    }
-  }
+  const images = await Promise.all(faces.map(face => {
+    const url = `${directoryUrl}/${face}.${extension}`;
+    return fetchImage(url);
+  }));
+
+  gl.activeTexture(textureUnit);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[0]);
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[1]);
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[2]);
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[3]);
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[4]);
+  gl.texImage2D(gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[5]);
+
+  gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+
+  return texture;
 }
 
+// Shadows
+function reserveDepthTexture(width: number, height: number, unit: GLenum = gl.TEXTURE0) {
+  gl.activeTexture(unit);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return texture;
+}
+
+
+function initializeDepthFbo(depthTexture: WebGLTexture | null) {
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTexture, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return framebuffer;
+}
+
+
+function initializeDepthProgram() {
+  const vertexSource = `
+uniform mat4 clipFromWorld;
+uniform mat4 worldFromModel;
+in vec3 position;
+
+void main() {
+  gl_Position = clipFromWorld * worldFromModel * vec4(position, 1.0);
+}
+  `;
+
+  const fragmentSource = `
+out vec4 fragmentColor;
+
+void main() {
+  fragmentColor = vec4(1.0);
+}
+    `;
+
+  depthProgram = new ShaderProgram(vertexSource, fragmentSource);
+}
+
+
+function renderDepths(width: number, height: number, fbo: WebGLFramebuffer | null) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+  gl.viewport(0, 0, width, height);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+
+  const clipFromWorld = clipFromLight.multiplyMatrix(lightFromWorld);
+
+  depthProgram.bind();
+  if (terrainDepthVao) {
+    depthProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld.elements);
+    depthProgram.setUniformMatrix4fv('worldFromModel', Matrix4.identity().elements);
+    terrainDepthVao.bind();
+    terrainDepthVao.drawIndexed(gl.TRIANGLES);
+    terrainDepthVao.unbind();
+  }
+
+  for (const inst of modelInstances) {
+    depthProgram.setUniformMatrix4fv('clipFromWorld', clipFromWorld.elements);
+    depthProgram.setUniformMatrix4fv('worldFromModel', inst.worldFromModel.elements);
+    inst.vao.bind();
+    inst.vao.drawIndexed(gl.TRIANGLES);
+    inst.vao.unbind();
+  }
+  depthProgram.unbind();
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+function plants(n: number, terrainWidth: number, terrainDepth: number) {
+  const positions: number[] = [];
+  const texPositions: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * terrainWidth;
+    const z = Math.random() * terrainDepth;
+    const y = heightmap.blerp(x/terrainScale.x,z/terrainScale.z) * terrainScale.y;
+
+    positions.push(x, y, z);
+    positions.push(x, y, z);
+    positions.push(x, y, z);
+    positions.push(x, y, z);
+
+
+    texPositions.push(0, 1);
+    texPositions.push(1, 1);
+    texPositions.push(0, 0);
+    texPositions.push(1,0);
+
+    indices.push(i * 4, i * 4 + 1, i * 4 + 3);
+    indices.push(i * 4, i * 4 + 3, i * 4 + 2);
+  }
+
+  // Create VAO
+  const vertexCount = positions.length / 3;
+  const attr = new VertexAttributes();
+  attr.addAttribute('position', vertexCount, 3, new Float32Array(positions));
+  attr.addAttribute('texPosition', texPositions.length / 2, 2, new Float32Array(texPositions));
+  attr.addIndices(new Uint32Array(indices));
+
+  return new VertexArray(billboardProgram, attr);
+}
+
+// Keyboard functions
 function onMouseUp(_event: MouseEvent) {
   // Ray starts at the right camera position and points along its forward vector
   const rayStart: Vector3 = cameraRight.from.clone();

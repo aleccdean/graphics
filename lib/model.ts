@@ -11,6 +11,7 @@ import { Vector3 } from './vector.js';
  */
 export class SceneModel {
     vao: VertexArray;
+    private vaoByProgram: Map<ShaderProgram, VertexArray>;
     worldFromModel: Matrix4;
     modelTexture: WebGLTexture | null = null;
     hasVertexColor: boolean = false;
@@ -22,6 +23,7 @@ export class SceneModel {
     health: number;
     mesh: gltf.Mesh; 
     model: gltf.Model;
+    attributes: VertexAttributes;
 
 
     constructor(model: gltf.Model, program: ShaderProgram, randomizePosition = true, range = 50, field: Field2, factors: Vector3, modelTexture?: WebGLTexture, health: number = 10) {
@@ -30,29 +32,30 @@ export class SceneModel {
         this.field = field;
         this.factors = factors;
         this.health = health;
-        const attributes = new VertexAttributes();
-        attributes.addAttribute('position', this.mesh.positions.count, 3, this.mesh.positions.buffer as Float32Array);
-        attributes.addAttribute('normal', this.mesh.normals!.count, 3, this.mesh.normals!.buffer as Float32Array);
-        attributes.addIndices(new Uint32Array(this.mesh.indices!.buffer));
+        this.attributes = new VertexAttributes();
+        this.attributes.addAttribute('position', this.mesh.positions.count, 3, this.mesh.positions.buffer as Float32Array);
+        this.attributes.addAttribute('normal', this.mesh.normals!.count, 3, this.mesh.normals!.buffer as Float32Array);
+        this.attributes.addIndices(new Uint32Array(this.mesh.indices!.buffer));
         if (this.mesh.colors) {
-            attributes.addAttribute('color', this.mesh.colors.count, this.mesh.colors.componentCount || 3, this.mesh.colors.buffer as Float32Array);
+            this.attributes.addAttribute('color', this.mesh.colors.count, this.mesh.colors.componentCount || 3, this.mesh.colors.buffer as Float32Array);
             this.hasVertexColor = true;
         }
         if (this.mesh.texCoord) {
-            attributes.addAttribute('texPosition', this.mesh.texCoord.count, this.mesh.texCoord.componentCount || 2, this.mesh.texCoord.buffer as Float32Array);
+            this.attributes.addAttribute('texPosition', this.mesh.texCoord.count, this.mesh.texCoord.componentCount || 2, this.mesh.texCoord.buffer as Float32Array);
         }
         if (this.mesh.weights) {
-            attributes.addAttribute('weights', this.mesh.weights.count, this.mesh.weights.componentCount || 4, this.mesh.weights.buffer as Float32Array);
+            this.attributes.addAttribute('weights', this.mesh.weights.count, this.mesh.weights.componentCount || 4, this.mesh.weights.buffer as Float32Array);
             this.hasWeights = true;
         }
         if (this.mesh.joints) {
-            attributes.addAttribute('joints', this.mesh.joints!.count, 4, new Float32Array(this.mesh.joints!.buffer));
+            this.attributes.addAttribute('joints', this.mesh.joints!.count, 4, new Float32Array(this.mesh.joints!.buffer));
             this.hasJoints = true;
         }
 
         // Store optional model texture and create the VAO
         this.modelTexture = modelTexture ?? null;
-        this.vao = new VertexArray(program, attributes);
+        this.vaoByProgram = new Map();
+        this.vao = this.getVao(program);
 
             // Build a randomized world-from-model translation matrix.
             if (randomizePosition) {
@@ -86,7 +89,11 @@ export class SceneModel {
     }
     
     destroy() { 
-        this.vao.destroy();
+        for (const vao of this.vaoByProgram.values()) {
+            vao.destroy();
+        }
+        this.vaoByProgram.clear();
+        this.attributes.destroy();
     }
 
     /**
@@ -152,6 +159,15 @@ export class SceneModel {
 
     animation(animation: string) {
         this.model.play(animation);
+    }
+
+    getVao(program: ShaderProgram): VertexArray {
+        let vao = this.vaoByProgram.get(program);
+        if (!vao) {
+            vao = new VertexArray(program, this.attributes);
+            this.vaoByProgram.set(program, vao);
+        }
+        return vao;
     }
 
 }

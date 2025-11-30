@@ -1,8 +1,9 @@
 uniform mat4 jointTransforms[32]; // supports up to 32 joints
+uniform int animation; // 1 = animate, 0 = rigid
+uniform mat4 textureFromWorld; //For shadows
 uniform mat4 worldFromModel;
 uniform mat4 eyeFromWorld;
 uniform mat4 clipFromEye;
-uniform int animation; // 1 = apply skinning, 0 = rigid
 
 in vec4 weights;
 in vec4 joints;
@@ -13,7 +14,8 @@ in vec3 color;
 
 out vec3 mixPositionEye;
 out vec3 mixNormalEye;
-out vec2 mixTexPosition;
+out vec4 mixTexPosition;
+out vec2 mixTexCoord;
 out vec3 mixColor;
 
 void main() {
@@ -32,7 +34,8 @@ void main() {
   gl_Position = clipFromEye * eyeFromWorld * worldFromModel * poseFromModel * vec4(position, 1.0);
   mixPositionEye = ( eyeFromWorld * worldFromModel * poseFromModel * vec4(position, 1.0)).xyz;
   mixNormalEye = (eyeFromWorld * worldFromModel * poseFromModel * vec4(normal, 0.0)).xyz;
-  mixTexPosition = texPosition;
+  mixTexPosition = textureFromWorld * worldFromModel * poseFromModel * vec4(position, 1.0);
+  mixTexCoord = texPosition;
   mixColor = color;
 }
 
