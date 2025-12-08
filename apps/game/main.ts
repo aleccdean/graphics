@@ -47,6 +47,11 @@ let rightPlayerAlive: boolean = true;
 let leftPlayerAlive: boolean = true;
 let crosshairLeft: HTMLDivElement | null = null;
 let crosshairRight: HTMLDivElement | null = null;
+// Kill counts and UI
+let killCountLeft = 0;
+let killCountRight = 0;
+let killLeftEl: HTMLElement | null = null;
+let killRightEl: HTMLElement | null = null;
 
 let heightmap: Field2;
 let hMap: Trimesh;
@@ -76,11 +81,11 @@ let lastRoundSec = -Infinity;
 //constants
 const hitCooldownSec = 0.6;
 const hitRadius = 3.5;
-const moveSpeed = 100;                             
-const turnSpeedDeg = 240;  
-const npcSpeed = 20;
+const moveSpeed = 30;                             
+const turnSpeedDeg = 160;  
+const npcSpeed = 15;
 const shootCooldown = 0.2;
-const roundCooldown = 45;
+const roundCooldown = 25;
 const particlesPerShot = 20;
 // Texture units
 const grassTextureUnit = 1;
@@ -214,6 +219,11 @@ async function initialize() {
 
   vao = new VertexArray(shaderProgram, attributes);
   await create_players();
+  // Initialize kill counter UI elements
+  killLeftEl = document.getElementById('kill-left-count');
+  killRightEl = document.getElementById('kill-right-count');
+  if (killLeftEl) killLeftEl.innerText = String(killCountLeft);
+  if (killRightEl) killRightEl.innerText = String(killCountRight);
   
   // Event listeners
   window.addEventListener('resize', () => resizeCanvas());
@@ -289,12 +299,20 @@ function renderRight() {
   shaderProgram.setUniform1i("useModelTexture", 0);
   shaderProgram.setUniform1i("useVertexColor", 0);
   if (grassTexture) {
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, grassTexture);
+    if (grassTexture instanceof WebGLTexture) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, grassTexture);
+    } else {
+      console.warn('Expected grassTexture to be WebGLTexture but was:', grassTexture);
+    }
   }
   if (depthTexture) {
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    if (depthTexture instanceof WebGLTexture) {
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    } else {
+      console.warn('Expected depthTexture to be WebGLTexture but was:', depthTexture);
+    }
   }
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('worldFromModel', worldFromModelRight.elements)
@@ -316,17 +334,23 @@ function renderRight() {
       if (inst.model && inst.model.skins && inst.model.skins.length > 0) {
         const joints = inst.model.skinTransforms(0, true);
         shaderProgram.setUniform1i('animation', 1);
-        for (let i = 0; i < 32; i++) {
+        for (let i = 0; i < 64; i++) {
           const mat = i < joints.length ? joints[i] : Matrix4.identity();
           shaderProgram.setUniformMatrix4fv(`jointTransforms[${i}]`, mat.elements);
         }
       }
       if (inst.modelTexture) {
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, inst.modelTexture);
-        shaderProgram.setUniform1i('useModelTexture', 1);
-        shaderProgram.setUniform1i('useVertexColor', 0);
-        shaderProgram.setUniform1i('modelTexture', 1);
+        if (inst.modelTexture instanceof WebGLTexture) {
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, inst.modelTexture);
+          shaderProgram.setUniform1i('useModelTexture', 1);
+          shaderProgram.setUniform1i('useVertexColor', 0);
+          shaderProgram.setUniform1i('modelTexture', 1);
+        } else {
+          console.warn('Expected inst.modelTexture to be WebGLTexture but was:', inst.modelTexture);
+          shaderProgram.setUniform1i('useModelTexture', 0);
+          shaderProgram.setUniform1i('useVertexColor', inst.hasVertexColor ? 1 : 0);
+        }
       } else if (inst.hasVertexColor) {
         shaderProgram.setUniform1i('useModelTexture', 0);
         shaderProgram.setUniform1i('useVertexColor', 1);
@@ -464,7 +488,7 @@ function renderLeft() {
       if (inst.model && inst.model.skins && inst.model.skins.length > 0) {
         const joints = inst.model.skinTransforms(0, true);
         shaderProgram.setUniform1i('animation', 1);
-        for (let i = 0; i < 32; i++) {
+        for (let i = 0; i < 64; i++) {
           const mat = i < joints.length ? joints[i] : Matrix4.identity();
           shaderProgram.setUniformMatrix4fv(`jointTransforms[${i}]`, mat.elements);
         }
@@ -577,12 +601,38 @@ async function create_players() {
 
 async function add_models(count: number) {
   // Read the glTF and wrap the first mesh in a SceneModel which builds its own VAO
-  const model = await gltf.Model.readFromUrl('models/Snowman.gltf');
-  const gun = await gltf.Model.readFromUrl('models/Gun.gltf')
+  const model = await gltf.Model.readFromUrl('models/Zombie.gltf');
+  // Temporary debug: print animations/skins/nodes to compare with Snowman.gltf
+  console.log('Zombie model meshes:', model.meshes);
+  console.log('Zombie model animations:', (model as any).animations);
+  console.log('Zombie model skins:', (model as any).skins);
+  console.log('Zombie model nodes count:', (model as any).nodes ? (model as any).nodes.length : 0);
+
+
+  const model2 = await gltf.Model.readFromUrl('models/snowman.gltf');
+  // Temporary debug: print animations/skins/nodes to compare with Snowman.gltf
+  console.log('Snowman model meshes:', model2.meshes);
+  console.log('Snowman model animations:', (model2 as any).animations);
+  console.log('Snowman model skins:', (model2 as any).skins);
+  console.log('Snowman model nodes count:', (model2 as any).nodes ? (model2 as any).nodes.length : 0);
+
   //Creates count random models
   for (let i = 0; i < count; ++i) {
     const inst = new SceneModel(model, shaderProgram, true, 20, heightmap, terrainScale);
-    inst.animation('head');
+    console.log(model.animations)
+    console.log(inst.model)
+    // Scale down zombies so they are a reasonable size compared to the Snowman.
+    // Tweak this value if models still look too large/small.
+    inst.setScale(0.02);
+    // Expand the hitbox to account for bullet spray/particle spread.
+    inst.setBBoxPadding(0.5);
+    try {
+      const wb = inst.getWorldBounds();
+      console.log('Placed zombie bounds (after scale):', wb);
+    } catch (e) {
+      console.warn('Could not compute zombie bounds after scaling', e);
+    }
+    inst.animation('alec_Skeleton');
     modelInstances.push(inst);
   }
 }
@@ -691,7 +741,8 @@ function animate(now: DOMHighResTimeStamp) {
     const yawDeg = Math.atan2(dir.z, dir.x) * 180 / Math.PI; // degrees
     inst.worldFromModel = Matrix4.identity()
       .multiplyMatrix(Matrix4.translate(inst.position.x, inst.position.y, inst.position.z))
-      .multiplyMatrix(Matrix4.rotateY(yawDeg - 90));
+      .multiplyMatrix(Matrix4.rotateY(yawDeg - 90))
+      .multiplyMatrix(Matrix4.scale(inst.modelScale, inst.modelScale, inst.modelScale));
     // Check if enemy close enough to hit and if out of cooldown range
     if (dist < hitRadius) {
       if (target === cameraLeft) {
@@ -708,11 +759,10 @@ function animate(now: DOMHighResTimeStamp) {
         }
       }
     }
-    inst.animation('head');
   }
   // Spawn a new wave every after cooldown
     if (nowSec - lastRoundSec >= roundCooldown) {
-      add_models(10);
+      add_models(20);
       lastRoundSec = nowSec;
     }
   modelInstances = modelInstances.filter(inst => {
@@ -865,8 +915,14 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
         const bounds = inst.getWorldBounds();
         const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
         if (points.length > 0) {
+          const before = inst.health;
           inst.takeDamage(1);
-          console.log(inst.health)
+          console.log(inst.health);
+          if (before > 0 && inst.health <= 0) {
+            // left player scored the kill
+            killCountLeft++;
+            if (killLeftEl) killLeftEl.innerText = String(killCountLeft);
+          }
         }
       }
       lastShootLeftSec = nowSec;
@@ -881,7 +937,13 @@ function shoot(now:DOMHighResTimeStamp,camera: FirstPersonCamera) {
         const bounds = inst.getWorldBounds();
         const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
         if (points.length > 0) {
+          const before = inst.health;
           inst.takeDamage(1);
+          if (before > 0 && inst.health <= 0) {
+            // right player scored the kill
+            killCountRight++;
+            if (killRightEl) killRightEl.innerText = String(killCountRight);
+          }
         }
       }
       lastShootRightSec = nowSec;
@@ -1111,19 +1173,8 @@ function plants(n: number, terrainWidth: number, terrainDepth: number) {
 
 // Keyboard functions
 function onMouseUp(_event: MouseEvent) {
-  // Ray starts at the right camera position and points along its forward vector
-  const rayStart: Vector3 = cameraRight.from.clone();
-  const dir: Vector3 = cameraRight.forward.normalize();
-
-  for (const inst of modelInstances) {
-    // Skip the right player's own model to avoid self-intersection
-    if (inst === cameraRightModel) continue;
-    const bounds = inst.getWorldBounds();
-    const points = intersectRayBox(rayStart, dir, bounds.min, bounds.max);
-    if (points.length > 0) {
-      console.log("intersection", points)
-    }
-  }
+  // Use the unified shoot() function so clicks respect cooldowns and apply damage.
+  shoot(performance.now(), cameraRight);
 }
 
 //ADD function for two controllers from stick-shift lab

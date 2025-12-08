@@ -48,3 +48,21 @@ body {
   #crosshair-right { left: 75vw; top: 50vh; }
   /* center of left half */
   #crosshair-left { left: 25vw; top: 50vh; }
+
+/* Kill counters shown in bottom-right of each player's viewport */
+.kill-counter {
+  position: fixed;
+  bottom: 12px;
+  width: 22vw;
+  text-align: right;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  z-index: 3;
+  pointer-events: none;
+  font-size: 18px;
+}
+.kill-counter.right { right: 2vw; }
+.kill-counter.left { left: 2vw; text-align: left; }
+.kill-counter .label { font-weight: 600; opacity: 0.9; }
+.kill-counter .count { font-weight: 700; font-size: 22px; margin-left: 8px; }

@@ -24,7 +24,7 @@ async function initialize() {
   const fragmentSource = await fetchText('flat-fragment.glsl');
   shaderProgram = new ShaderProgram(vertexSource, fragmentSource);
 
-  model = await gltf.Model.readFromUrl('model/Snowman.gltf');
+  model = await gltf.Model.readFromUrl('models/Zombie.gltf');
   const attributes = new VertexAttributes();
   attributes.addAttribute('position', model.meshes[0].positions.count, 3, model.meshes[0].positions.buffer);
   attributes.addAttribute('normal', model.meshes[0].normals!.count, 3, model.meshes[0].normals!.buffer);
@@ -102,7 +102,7 @@ function render() {
   shaderProgram.setUniform3f("albedo", 0.0, 0.0, 0.0);
   shaderProgram.setUniform3f("diffuseColor", 1.0, 0.0, 0.0);
   shaderProgram.setUniform1f("ambientFactor", 0.8);
-  shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
+  //shaderProgram.setUniform3f("specularColor", 1.0, 1.0, 1.0);
   shaderProgram.setUniform1f("shininess", 1.0);
   shaderProgram.setUniformMatrix4fv('clipFromEye', clipFromEye.elements);
   shaderProgram.setUniformMatrix4fv('eyeFromWorld', eyeFromWorld.elements);

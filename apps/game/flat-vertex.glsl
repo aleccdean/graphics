@@ -1,4 +1,4 @@
-uniform mat4 jointTransforms[32]; // supports up to 32 joints
+uniform mat4 jointTransforms[64]; // supports up to 64 joints
 uniform int animation; // 1 = animate, 0 = rigid
 uniform mat4 textureFromWorld; //For shadows
 uniform mat4 worldFromModel;

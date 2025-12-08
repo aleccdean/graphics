@@ -24,11 +24,27 @@ export class SceneModel {
     mesh: gltf.Mesh; 
     model: gltf.Model;
     attributes: VertexAttributes;
+    meshMinY: number = 0;
+    modelScale: number = 2;
+    /** Optional world-space padding to expand the computed AABB (in world units) */
+    bboxPadding: number = 0;
 
 
     constructor(model: gltf.Model, program: ShaderProgram, randomizePosition = true, range = 50, field: Field2, factors: Vector3, modelTexture?: WebGLTexture, health: number = 10) {
         this.model = model;
         this.mesh = model.meshes[0];
+        // Compute mesh min Y so we can align the model's base to the terrain
+        try {
+            const posBuf = this.mesh.positions.buffer;
+            let minY = Infinity;
+            for (let i = 1; i < posBuf.length; i += 3) {
+                if (posBuf[i] < minY) minY = posBuf[i];
+            }
+            if (!isFinite(minY)) minY = 0;
+            this.meshMinY = minY;
+        } catch (e) {
+            this.meshMinY = 0;
+        }
         this.field = field;
         this.factors = factors;
         this.health = health;
@@ -80,12 +96,36 @@ export class SceneModel {
 
                 this.worldFromModel = Matrix4.identity().multiplyMatrix(Matrix4.translate(x, y, z));
 
-                console.log('SceneModel: placed at', { x, y, z });
+                // Keep this.position as the ground contact point (y = terrain height)
+                this.position = new Vector3(x, y, z);
+                // Translate the model so its lowest vertex (meshMinY) sits at 'y'
+                this.worldFromModel = Matrix4.identity()
+                    .multiplyMatrix(Matrix4.translate(x, y - this.meshMinY * this.modelScale, z))
+                    .multiplyMatrix(Matrix4.scale(this.modelScale, this.modelScale, this.modelScale));
+
+                console.log('SceneModel: placed at', { x, y, z, meshMinY: this.meshMinY });
+                try {
+                    const wb = this.getWorldBounds();
+                    console.log('SceneModel world-space bounds after placement:', { worldMinY: wb.min.y, worldMaxY: wb.max.y });
+                } catch (e) {
+                    console.warn('Failed to compute world bounds for debug', e);
+                }
             } else {
-                this.worldFromModel = Matrix4.identity();
-                console.log('SceneModel: no random placement — using identity transform');
+                // No random placement: place model so its base sits at world y=0
+                this.position = new Vector3(0, 0, 0);
+                this.worldFromModel = Matrix4.identity()
+                    .multiplyMatrix(Matrix4.translate(0, -this.meshMinY * this.modelScale, 0))
+                    .multiplyMatrix(Matrix4.scale(this.modelScale, this.modelScale, this.modelScale));
+                console.log('SceneModel: no random placement — aligning base to y=0, meshMinY=', this.meshMinY);
+                try {
+                    const wb = this.getWorldBounds();
+                    console.log('SceneModel world-space bounds (no-random):', { worldMinY: wb.min.y, worldMaxY: wb.max.y });
+                } catch (e) {
+                    console.warn('Failed to compute world bounds for debug', e);
+                }
             }
-            this.position = this.getPosition();
+            // Ensure this.position is set (getPosition will now prefer stored position)
+            if (!this.position) this.position = this.getPosition();
     }
     
     destroy() { 
@@ -103,21 +143,95 @@ export class SceneModel {
      */
     getWorldBounds(): { min: Vector3; max: Vector3 } {
         const pos = this.mesh.positions.buffer;
-        // Transform first vertex to seed
-        let p = this.worldFromModel.multiplyPosition(new Vector3(pos[0], pos[1], pos[2]));
-        let minX = p.x, minY = p.y, minZ = p.z;
-        let maxX = p.x, maxY = p.y, maxZ = p.z;
-        for (let i = 3; i < pos.length; i += 3) {
-            p = this.worldFromModel.multiplyPosition(new Vector3(pos[i], pos[i + 1], pos[i + 2]));
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-            if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
-        }
-        return { min: new Vector3(minX, minY, minZ), max: new Vector3(maxX, maxY, maxZ) };
+            // compute animated vertex positions using joint transforms
+            // so animated vertices are included in the bounds. Otherwise transform vertices
+            // by the worldFromModel matrix.
+            let minX = Infinity, minY = Infinity, minZ = Infinity;
+            let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+            const vertexCount = pos.length / 3;
+
+            const hasSkin = this.model && this.model.skins && this.model.skins.length > 0 && this.mesh.joints && this.mesh.weights;
+            let jointTransforms: Matrix4[] = [];
+            if (hasSkin) {
+                try {
+                    jointTransforms = this.model.skinTransforms(0, true);
+                } catch (e) {
+                    jointTransforms = [];
+                }
+            }
+
+            const jointsBuf: any = this.mesh.joints ? this.mesh.joints.buffer : null;
+            const weightsBuf: any = this.mesh.weights ? this.mesh.weights.buffer : null;
+
+            for (let vi = 0; vi < vertexCount; ++vi) {
+                const vx = pos[vi * 3 + 0];
+                const vy = pos[vi * 3 + 1];
+                const vz = pos[vi * 3 + 2];
+                let worldP: Vector3;
+
+                if (hasSkin && jointsBuf && weightsBuf) {
+                    // build poseFromModel = sum_k weight_k * jointTransform[j_k]
+                    const j0 = jointsBuf[vi * 4 + 0] | 0;
+                    const j1 = jointsBuf[vi * 4 + 1] | 0;
+                    const j2 = jointsBuf[vi * 4 + 2] | 0;
+                    const j3 = jointsBuf[vi * 4 + 3] | 0;
+                    const w0 = weightsBuf[vi * 4 + 0] || 0;
+                    const w1 = weightsBuf[vi * 4 + 1] || 0;
+                    const w2 = weightsBuf[vi * 4 + 2] || 0;
+                    const w3 = weightsBuf[vi * 4 + 3] || 0;
+
+                    const pose = new Matrix4();
+                    // zero-initialize
+                    for (let e = 0; e < 16; ++e) pose.elements[e] = 0;
+
+                    const addWeighted = (jtIndex: number, weight: number) => {
+                        if (!isFinite(weight) || weight === 0) return;
+                        const jt = jointTransforms[jtIndex] || Matrix4.identity();
+                        for (let e = 0; e < 16; ++e) {
+                            pose.elements[e] += jt.elements[e] * weight;
+                        }
+                    };
+
+                    addWeighted(j0, w0);
+                    addWeighted(j1, w1);
+                    addWeighted(j2, w2);
+                    addWeighted(j3, w3);
+
+                    // transform local vertex by pose then by worldFromModel
+                    const localP = pose.multiplyPosition(new Vector3(vx, vy, vz));
+                    worldP = this.worldFromModel.multiplyPosition(localP);
+                } else {
+                    worldP = this.worldFromModel.multiplyPosition(new Vector3(vx, vy, vz));
+                }
+
+                if (worldP.x < minX) minX = worldP.x; if (worldP.x > maxX) maxX = worldP.x;
+                if (worldP.y < minY) minY = worldP.y; if (worldP.y > maxY) maxY = worldP.y;
+                if (worldP.z < minZ) minZ = worldP.z; if (worldP.z > maxZ) maxZ = worldP.z;
+            }
+            // Expand bounds by optional padding in world space
+            if (this.bboxPadding && isFinite(this.bboxPadding) && this.bboxPadding > 0) {
+                minX -= this.bboxPadding;
+                minY -= this.bboxPadding;
+                minZ -= this.bboxPadding;
+                maxX += this.bboxPadding;
+                maxY += this.bboxPadding;
+                maxZ += this.bboxPadding;
+            }
+
+            return { min: new Vector3(minX, minY, minZ), max: new Vector3(maxX, maxY, maxZ) };
     }
+
+        /** Set world-space bounding-box padding (in world units) */
+        setBBoxPadding(p: number) {
+            if (!isFinite(p) || p < 0) return;
+            this.bboxPadding = p;
+        }
 
     /** Get just the translation component (world position) */
     getPosition(): Vector3 {
+        // Prefer explicit stored position (which represents the ground contact point)
+        if (this.position) return this.position;
         return new Vector3(
             this.worldFromModel.get(0,3),
             this.worldFromModel.get(1,3),
@@ -131,9 +245,22 @@ export class SceneModel {
         const height = this.field.blerp(x, z);
         const groundY = height * this.factors.y;
         this.position.y = groundY;
-        this.worldFromModel = Matrix4.identity().multiplyMatrix(
-            Matrix4.translate(this.position.x, this.position.y, this.position.z)
-        );
+        // Keep mesh base aligned: translate by (groundY - meshMinY)
+        this.worldFromModel = Matrix4.identity()
+            .multiplyMatrix(Matrix4.translate(this.position.x, this.position.y - this.meshMinY * this.modelScale, this.position.z))
+            .multiplyMatrix(Matrix4.scale(this.modelScale, this.modelScale, this.modelScale));
+    }
+
+    /** Set a uniform scale for this instance and rebuild world transform to preserve base alignment. */
+    setScale(s: number) {
+        if (!isFinite(s) || s <= 0) return;
+        this.modelScale = s;
+        // Rebuild worldFromModel to keep the base (meshMinY) sitting on the stored position.y
+        if (this.position) {
+            this.worldFromModel = Matrix4.identity()
+                .multiplyMatrix(Matrix4.translate(this.position.x, this.position.y - this.meshMinY * this.modelScale, this.position.z))
+                .multiplyMatrix(Matrix4.scale(this.modelScale, this.modelScale, this.modelScale));
+        }
     }
 
     keepInTerrain() {
