@@ -1,6 +1,6 @@
 # CS 488 - Computer Graphics Repository
 
-A comprehensive collection of WebGL-based graphics applications and demonstrations developed for the CS 488 Computer Graphics course at James Madison University. This repository contains multiple renderer implementations, educational examples, and practical projects showcasing various graphics programming concepts.
+A comprehensive collection of WebGL-based graphics applications and demonstrations. This repository contains multiple renderer implementations, educational examples, and practical projects showcasing various graphics programming concepts.
 
 ## Overview
 
